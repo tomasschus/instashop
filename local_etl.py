@@ -11,7 +11,6 @@ warnings.filterwarnings('ignore')
 
 class LocalInstaShopETL:
     def __init__(self):
-        """Inicializa conexiones a bases de datos locales"""
         self.connections = {
             'instashop': {
                 'host': 'localhost',
@@ -51,7 +50,6 @@ class LocalInstaShopETL:
         }
     
     def get_connection(self, db_key):
-        """Obtiene conexión a base de datos"""
         config = self.connections[db_key]
         return psycopg2.connect(
             host=config['host'],
@@ -62,7 +60,6 @@ class LocalInstaShopETL:
         )
     
     def test_connections(self):
-        """Prueba todas las conexiones"""
         print("🔍 Probando conexiones a bases de datos...")
         
         for db_key, config in self.connections.items():
@@ -81,7 +78,6 @@ class LocalInstaShopETL:
         return True
     
     def extract_sales_data(self):
-        """Extrae datos de ventas"""
         print("📊 Extrayendo datos de ventas...")
         
         conn = self.get_connection('instashop')
@@ -117,7 +113,6 @@ class LocalInstaShopETL:
         return df
     
     def extract_inventory_data(self):
-        """Extrae datos de inventario"""
         print("📦 Extrayendo datos de inventario...")
         
         conn = self.get_connection('erp')
@@ -144,23 +139,19 @@ class LocalInstaShopETL:
         return df
     
     def calculate_kpis(self, sales_df):
-        """Calcula KPIs principales"""
         print("📈 Calculando KPIs...")
         
         if sales_df.empty:
             print("⚠️ No hay datos de ventas para calcular KPIs")
             return {}
         
-        # KPIs básicos
         total_revenue = sales_df['total_amount'].sum()
         total_transactions = sales_df['transaction_id'].nunique()
         avg_order_value = sales_df['total_amount'].mean()
         unique_customers = sales_df['customer_id'].nunique()
         
-        # KPIs por período
         sales_df['transaction_date'] = pd.to_datetime(sales_df['transaction_date'])
         
-        # Últimos 30 días
         last_30_days = sales_df[
             sales_df['transaction_date'] >= (datetime.now() - timedelta(days=30))
         ]
@@ -182,13 +173,11 @@ class LocalInstaShopETL:
         return kpis
     
     def create_dwh_tables(self):
-        """Crea tablas en DWH si no existen"""
         print("🏗️ Creando tablas en DWH...")
         
         conn = self.get_connection('dwh')
         cursor = conn.cursor()
         
-        # Tabla de resumen de ventas
         sales_table_sql = """
         CREATE TABLE IF NOT EXISTS sales_summary (
             transaction_id INT,
@@ -205,7 +194,6 @@ class LocalInstaShopETL:
         )
         """
         
-        # Tabla de estado de inventario
         inventory_table_sql = """
         CREATE TABLE IF NOT EXISTS inventory_status (
             product_id INT,
@@ -217,7 +205,6 @@ class LocalInstaShopETL:
         )
         """
         
-        # Tabla de KPIs
         kpis_table_sql = """
         CREATE TABLE IF NOT EXISTS kpis_summary (
             metric_name VARCHAR(50),
@@ -238,7 +225,6 @@ class LocalInstaShopETL:
         print("✅ Tablas DWH creadas")
     
     def save_kpis_to_dwh(self, kpis):
-        """Guarda KPIs al DWH"""
         if not kpis:
             return
             
@@ -247,11 +233,9 @@ class LocalInstaShopETL:
         conn = self.get_connection('dwh')
         cursor = conn.cursor()
         
-        # Limpiar KPIs del día actual
         today = datetime.now().date()
         cursor.execute("DELETE FROM kpis_summary WHERE metric_date = %s", (today,))
         
-        # Insertar nuevos KPIs
         for metric_name, value in kpis.items():
             if metric_name != 'calculated_at' and isinstance(value, (int, float)):
                 cursor.execute(
@@ -266,31 +250,24 @@ class LocalInstaShopETL:
         print("✅ KPIs guardados en DWH")
     
     def run_etl(self):
-        """Ejecuta el proceso ETL completo"""
         print(f"\n{'='*60}")
         print(f"🚀 INICIANDO ETL PIPELINE LOCAL - {datetime.now()}")
         print(f"{'='*60}\n")
         
         try:
-            # 0. Probar conexiones
             if not self.test_connections():
                 print("❌ Error en conexiones a bases de datos")
                 return False
             
-            # 1. Crear tablas DWH
             self.create_dwh_tables()
             
-            # 2. Extraer datos
             sales_df = self.extract_sales_data()
             inventory_df = self.extract_inventory_data()
             
-            # 3. Transformar y calcular métricas
             kpis = self.calculate_kpis(sales_df)
             
-            # 4. Guardar KPIs al DWH
             self.save_kpis_to_dwh(kpis)
             
-            # 5. Mostrar resumen
             print(f"\n{'='*60}")
             print("📊 RESUMEN DEL ETL")
             print(f"{'='*60}")
@@ -322,7 +299,6 @@ class LocalInstaShopETL:
             return False
 
 def main():
-    """Función principal"""
     etl = LocalInstaShopETL()
     etl.run_etl()
 

@@ -98,7 +98,7 @@ instashop/
 ├── 📊 fake-data.py            # Generador de datos
 ├── 📁 data/                   # Datos persistentes PostgreSQL
 ├── 🐍 env/                    # Entorno virtual Python
-└── 📋 README.md              # Este archivo
+└── 📋 README.md
 ```
 
 ## 🛠️ Tecnologías
@@ -305,13 +305,13 @@ python local_etl.py
 # Lanzar dashboard
 streamlit run dashboard.py
 
-# Generar datos de prueba
 python fake-data.py
 ```
 
 ## 🎯 Próximos Pasos
 
 ### 📈 Mejoras Planificadas
+
 - [ ] **Machine Learning**: Modelos predictivos
 - [ ] **API REST**: Endpoints para integración
 - [ ] **Notificaciones**: Email/Slack alerts
@@ -319,6 +319,7 @@ python fake-data.py
 - [ ] **Multi-idioma**: Soporte i18n
 
 ### 🚀 Escalabilidad
+
 - [ ] **Kubernetes**: Orquestación avanzada
 - [ ] **Redis Cache**: Cache distribuido
 - [ ] **Load Balancer**: Alta disponibilidad
@@ -336,4 +337,4 @@ Para problemas o mejoras:
 
 **📊 InstaShop Analytics Platform** - Transformando datos en decisiones de negocio
 
-*Desarrollado con ❤️ usando Docker, Python y Streamlit*
+Desarrollado con ❤️ usando Docker, Python y Streamlit

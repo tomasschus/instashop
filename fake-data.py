@@ -5,7 +5,6 @@ from faker import Faker
 
 fake = Faker()
 
-# ---- conexiones a múltiples DBs ----
 conns = {
     "onlinestore": psycopg2.connect(
         dbname="instashop", user="insta", password="insta123", host="localhost", port="5432"
@@ -22,9 +21,6 @@ conns = {
 }
 cursors = {k: v.cursor() for k, v in conns.items()}
 
-# =====================================================
-# OnlineStore
-# =====================================================
 cursors["onlinestore"].execute("""
 CREATE TABLE IF NOT EXISTS Customer (
     customer_id BIGSERIAL PRIMARY KEY,
@@ -103,9 +99,6 @@ CREATE TABLE IF NOT EXISTS InventoryMovement (
 );
 """)
 
-# =====================================================
-# Logistics
-# =====================================================
 cursors["logistics"].execute("""
 CREATE TABLE IF NOT EXISTS Carrier (
     carrier_id BIGSERIAL PRIMARY KEY,
@@ -126,9 +119,6 @@ CREATE TABLE IF NOT EXISTS Shipment (
 );
 """)
 
-# =====================================================
-# CRM
-# =====================================================
 cursors["crm"].execute("""
 CREATE TABLE IF NOT EXISTS Interaction (
     interaction_id BIGSERIAL PRIMARY KEY,
@@ -154,16 +144,13 @@ CREATE TABLE IF NOT EXISTS CustomerSegment (
 );
 """)
 
-# =====================================================
-# Generadores de datos
-# =====================================================
 def generate_customers(n):
     return [
         (
             fake.name(),
             fake.company(),
             fake.email(),
-            fake.phone_number()[:20],  # Limitar a 20 caracteres
+            fake.phone_number()[:20],
             random.choice(["Free", "Pro", "Enterprise"]),
             fake.image_url(),
             fake.url()
@@ -313,7 +300,7 @@ cursors["onlinestore"].execute("SELECT product_id FROM Product;")
 product_ids = [r[0] for r in cursors["onlinestore"].fetchall()]
 
 print("Insertando Transactions...")
-transactions = generate_transactions(1000, buyer_ids, customer_ids)  # Más transacciones para análisis de tendencias
+transactions = generate_transactions(1000, buyer_ids, customer_ids)
 cursors["onlinestore"].executemany(
     "INSERT INTO Transaction (buyer_id, customer_id, transaction_date, total_amount, payment_method, status) VALUES (%s,%s,%s,%s,%s,%s)",
     transactions

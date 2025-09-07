@@ -1,12 +1,12 @@
-import streamlit as st
+from datetime import datetime, timedelta
+
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
-from plotly.subplots import make_subplots
 import psycopg2
-from datetime import datetime, timedelta
+import streamlit as st
+from plotly.subplots import make_subplots
 
-# Configuración de la página
 st.set_page_config(
     page_title="InstaShop Analytics Dashboard",
     page_icon="🛒",
@@ -14,10 +14,8 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Conexiones a bases de datos
 @st.cache_resource
 def get_db_config():
-    """Retorna configuración de bases de datos"""
     return {
         'instashop': {'host': 'localhost', 'port': 5432, 'dbname': 'instashop', 'user': 'insta', 'password': 'insta123'},
         'crm': {'host': 'localhost', 'port': 5433, 'dbname': 'crm_db', 'user': 'crm', 'password': 'crm123'},
@@ -26,13 +24,11 @@ def get_db_config():
     }
 
 def get_connection(db_key):
-    """Obtiene conexión a base de datos"""
     config = get_db_config()[db_key]
     return psycopg2.connect(**config)
 
-@st.cache_data(ttl=60)  # Cache por 1 minuto
+@st.cache_data(ttl=60)
 def load_sales_data():
-    """Carga datos de ventas"""
     conn = get_connection("instashop")
     
     query = """
@@ -59,9 +55,8 @@ def load_sales_data():
     conn.close()
     return df
 
-@st.cache_data(ttl=60)  # Cache por 1 minuto
+@st.cache_data(ttl=60)
 def load_customer_metrics():
-    """Métricas de customers"""
     conn = get_connection("instashop")
     
     query = """
@@ -83,9 +78,8 @@ def load_customer_metrics():
     conn.close()
     return df
 
-@st.cache_data(ttl=60)  # Cache por 1 minuto
+@st.cache_data(ttl=60)
 def load_inventory_data():
-    """Datos de inventario"""
     conn = get_connection("erp")
     
     query = """
@@ -108,27 +102,22 @@ def load_inventory_data():
     return df
 
 def main():
-    # Header
     st.title("🛒 InstaShop Analytics Dashboard")
     st.markdown("**Inteligencia de Negocio para el Comercio Electrónico**")
     
-    # Sidebar
     st.sidebar.header("🎛️ Controles")
     
-    # Filtros
     date_range = st.sidebar.date_input(
         "Rango de fechas",
         value=(datetime.now() - timedelta(days=30), datetime.now()),
         max_value=datetime.now()
     )
     
-    # Cargar datos
     with st.spinner("Cargando datos..."):
         sales_df = load_sales_data()
         customer_metrics = load_customer_metrics()
         inventory_df = load_inventory_data()
     
-    # Filtrar por fechas
     if len(date_range) == 2:
         start_date, end_date = date_range
         sales_df = sales_df[
@@ -136,7 +125,6 @@ def main():
             (pd.to_datetime(sales_df['transaction_date']).dt.date <= end_date)
         ]
     
-    # KPIs principales
     st.header("📊 KPIs Principales")
     
     col1, col2, col3, col4 = st.columns(4)
@@ -157,14 +145,11 @@ def main():
         active_customers = customer_metrics[customer_metrics['total_revenue'] > 0].shape[0]
         st.metric("👥 Customers Activos", f"{active_customers:,}")
     
-    # Gráficos
     st.header("📈 Análisis de Ventas")
     
-    # Ventas por tiempo
     col1, col2 = st.columns(2)
     
     with col1:
-        # Ventas diarias
         daily_sales = sales_df.groupby(
             pd.to_datetime(sales_df['transaction_date']).dt.date
         )['total_amount'].sum().reset_index()
@@ -176,10 +161,9 @@ def main():
             title="Ventas Diarias",
             labels={'total_amount': 'Revenue ($)', 'transaction_date': 'Fecha'}
         )
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, use_container_width=True, key="daily_sales_chart")
     
     with col2:
-        # Top categorías
         category_sales = sales_df.groupby('category')['total_amount'].sum().sort_values(ascending=False).head(10)
         
         fig = px.bar(
@@ -189,15 +173,13 @@ def main():
             title="Top 10 Categorías por Revenue",
             labels={'x': 'Revenue ($)', 'y': 'Categoría'}
         )
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, use_container_width=True, key="category_sales_chart")
     
-    # Análisis de customers
     st.header("👥 Análisis de Customers")
     
     col1, col2 = st.columns(2)
     
     with col1:
-        # Segmentación por subscription plan
         plan_metrics = customer_metrics.groupby('subscription_plan').agg({
             'total_revenue': 'sum',
             'customer_id': 'count'
@@ -209,10 +191,9 @@ def main():
             names='subscription_plan',
             title="Distribución de Customers por Plan"
         )
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, use_container_width=True, key="customer_plan_chart")
     
     with col2:
-        # Top 10 customers
         top_customers = customer_metrics.head(10)
         
         fig = px.bar(
@@ -223,15 +204,13 @@ def main():
             title="Top 10 Customers por Revenue",
             labels={'total_revenue': 'Revenue ($)', 'business_name': 'Customer'}
         )
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, use_container_width=True, key="top_customers_chart")
     
-    # Análisis de inventario
     st.header("📦 Análisis de Inventario")
     
     col1, col2 = st.columns(2)
     
     with col1:
-        # Estado del stock
         stock_status_counts = inventory_df['stock_status'].value_counts()
         
         fig = px.pie(
@@ -244,10 +223,9 @@ def main():
                 'Óptimo': '#44ff44'
             }
         )
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, use_container_width=True, key="stock_status_chart")
     
     with col2:
-        # Productos con stock crítico
         critical_stock = inventory_df[inventory_df['stock_status'] == 'Crítico'].head(10)
         
         if not critical_stock.empty:
@@ -259,11 +237,10 @@ def main():
                 title="Productos con Stock Crítico",
                 labels={'available_quantity': 'Cantidad Disponible', 'product_id': 'Product ID'}
             )
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, use_container_width=True, key="critical_stock_chart")
         else:
             st.success("🎉 No hay productos con stock crítico")
     
-    # Tablas detalladas
     st.header("📋 Datos Detallados")
     
     tab1, tab2, tab3 = st.tabs(["Ventas Recientes", "Métricas de Customers", "Estado de Inventario"])
