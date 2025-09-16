@@ -93,7 +93,36 @@ docker exec kafka1 kafka-consumer-groups.sh --bootstrap-server localhost:9092 --
 
 - **Spark UI**: http://localhost:8080
 - **Jupyter Notebook**: http://localhost:8888
-- **Streamlit Dashboard**: http://localhost:8501
+- **Streamlit Dashboard Original**: http://localhost:8501
+- **🚀 Spark Analytics Dashboard**: http://localhost:8502
+
+---
+
+## 🚀 **SPARK ANALYTICS DASHBOARD**
+
+### **Dashboard de Análisis en Tiempo Real**
+**URL**: http://localhost:8502
+
+#### **📊 Características del Dashboard:**
+- **Métricas en tiempo real**: Total eventos, clientes únicos, ingresos, último evento
+- **Visualizaciones interactivas**: Gráficos de torta y barras con Plotly
+- **Análisis por categoría**: Eventos y ingresos por tipo de producto
+- **Top clientes**: Ranking de clientes por número de transacciones
+- **Tabla de eventos recientes**: Últimos 20 eventos procesados
+- **Auto-refresh**: Se actualiza cada 30 segundos automáticamente
+
+#### **🎯 Métricas que muestra:**
+1. **📈 Distribución de eventos**: Gráfico de torta mostrando tipos de eventos
+2. **🏆 Top 5 clientes**: Clientes con más transacciones
+3. **🛍️ Análisis por categoría**: Eventos y ingresos por categoría de productos
+4. **📋 Eventos recientes**: Tabla con los últimos eventos procesados
+5. **💰 Métricas financieras**: Ingresos totales y promedio por transacción
+
+#### **🔄 Cómo usar el Dashboard:**
+1. **Acceder**: Ve a http://localhost:8502
+2. **Ver datos**: El dashboard se actualiza automáticamente cada 30 segundos
+3. **Refresh manual**: Usa el botón "🔄 Refresh Data" para actualización inmediata
+4. **Monitorear pipeline**: Ve el estado de todos los componentes del pipeline
 
 ---
 
@@ -168,9 +197,16 @@ docker exec kafka1 kafka-consumer-groups.sh --bootstrap-server localhost:9092 --
 ✅ **Consumer funcionando** - Procesando datos en tiempo real (LAG = 0)  
 ✅ **DWH funcionando** - 101+ eventos almacenados  
 ✅ **Spark funcionando** - Cluster activo (UI en puerto 8080)  
-✅ **Dashboard funcionando** - Streamlit en puerto 8501  
+✅ **Dashboard original funcionando** - Streamlit en puerto 8501  
+✅ **🚀 Spark Analytics Dashboard funcionando** - Streamlit en puerto 8502  
 
 **El pipeline Big Data está 100% funcional y procesando datos en tiempo real!**
+
+### **🎉 NUEVAS CARACTERÍSTICAS:**
+- **Dashboard de Spark Analytics**: Visualizaciones en tiempo real de los datos procesados
+- **Análisis automático**: Métricas actualizadas cada 30 segundos
+- **Interfaz interactiva**: Gráficos con Plotly para mejor experiencia de usuario
+- **Monitoreo completo**: Estado de todos los componentes del pipeline visible
 
 ---
 
@@ -182,9 +218,11 @@ instashop/
 │   ├── producer.py          # Genera eventos a Kafka
 │   └── consumer.py          # Lee de Kafka y guarda en DWH
 ├── spark_analytics/
-│   └── streaming.py         # Análisis en tiempo real con Spark
+│   ├── streaming.py         # Análisis en tiempo real con Spark (Kafka)
+│   └── simple_streaming.py  # Análisis simplificado desde DWH
 ├── config.py               # Configuración centralizada
 ├── run_pipeline.py         # Script principal del pipeline
+├── spark_dashboard.py      # Dashboard de Spark Analytics
 └── BIG_DATA_PIPELINE_README.md  # Este archivo
 ```
 
