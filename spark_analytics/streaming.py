@@ -12,7 +12,7 @@ class InstaShopSparkStreaming:
     def __init__(self):
         self.spark = SparkSession.builder \
             .appName("InstaShopStreaming") \
-            .config("spark.jars.packages", "org.apache.spark:spark-sql-kafka-0-10_2.12:3.4.0") \
+            .config("spark.jars.packages", "org.apache.spark:spark-sql-kafka-0-10_2.12:3.2.0") \
             .getOrCreate()
         
         self.spark.sparkContext.setLogLevel("WARN")
