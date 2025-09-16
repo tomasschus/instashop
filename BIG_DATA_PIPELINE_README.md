@@ -230,8 +230,8 @@ instashop/
 
 ## 🚨 **NOTAS IMPORTANTES**
 
-- **Java requerido**: Spark necesita Java 17+ (actualmente tienes Java 11)
-- **Puertos utilizados**: 5432-5436 (PostgreSQL), 9092-9094 (Kafka), 8080 (Spark), 8501 (Streamlit), 8888 (Jupyter)
+- **Java requerido**: Spark necesita Java 17+ para funcionar correctamente
+- **Puertos utilizados**: 5432-5436 (PostgreSQL), 9092-9094 (Kafka), 8080 (Spark), 8501-8502 (Streamlit), 8888 (Jupyter)
 - **Consumer Group**: `instashop-analytics-group` (no cambiar)
 - **Datos en tiempo real**: El consumer procesa todos los eventos sin retraso (LAG = 0)
 
