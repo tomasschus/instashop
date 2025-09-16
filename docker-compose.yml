@@ -6,6 +6,7 @@ volumes:
   kafka1_data:
   kafka2_data:
   kafka3_data:
+  redis_data:
 
 services:
   # Base central de datos
@@ -172,5 +173,17 @@ services:
       - "8888:8888"
     volumes:
       - ./spark-app:/home/jovyan/work
+    networks:
+      - instashop-net
+
+  # Redis para métricas en tiempo real
+  redis:
+    image: redis:7-alpine
+    container_name: redis-metrics
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
     networks:
       - instashop-net

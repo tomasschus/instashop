@@ -262,8 +262,10 @@ class DynamicInstaShopKafkaProducer:
     def send_event(self, topic, event):
         """Enviar evento a Kafka"""
         try:
+            logger.info(f"🔄 Enviando a {topic}: {event['event_type']} - Cliente {event['customer_id']}")
             self.producer.send(topic, value=event, key=str(event['customer_id']))
-            logger.info(f"📤 Enviado a {topic}: {event['event_type']} - Cliente {event['customer_id']}")
+            self.producer.flush()  # Forzar envío inmediato
+            logger.info(f"✅ Enviado exitosamente a {topic}: {event['event_type']} - Cliente {event['customer_id']}")
         except Exception as e:
             logger.error(f"❌ Error enviando a {topic}: {e}")
     

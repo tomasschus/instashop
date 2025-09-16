@@ -20,16 +20,16 @@
 - **Destino**: Almacena datos procesados en Data Warehouse (DWH)
 - **Tabla**: `realtime_events` en PostgreSQL DWH
 
-### **4. ⚡ Spark Streaming**
-- **Script**: `spark-streaming/kafka_streaming_analytics.py`
-- **Función**: Procesa streams de Kafka en tiempo real
-- **Análisis**: Agregaciones, métricas y análisis de comportamiento
-- **Salida**: Métricas en consola (preparado para dashboard)
+### **4. ⚡ Spark Streaming + Redis**
+- **Script**: `spark-streaming/realtime_metrics_producer.py`
+- **Función**: Procesa streams de Kafka y envía métricas a Redis
+- **Análisis**: Agregaciones en tiempo real (ventanas de 1 minuto)
+- **Salida**: Métricas almacenadas en Redis para dashboard en tiempo real
 
-### **5. 📊 Dashboard Streamlit**
-- **Script**: `dashboards/realtime_analytics_dashboard.py`
-- **Función**: Visualización interactiva de datos del DWH
-- **Características**: KPIs, gráficos, análisis temporal, auto-refresh
+### **5. 📊 Dashboard Streamlit + Redis**
+- **Script**: `dashboards/realtime_spark_dashboard.py`
+- **Función**: Visualización en tiempo real de métricas de Spark
+- **Características**: KPIs en tiempo real, gráficos dinámicos, auto-refresh cada 5s
 - **URL**: http://localhost:8501
 
 ---
@@ -61,14 +61,14 @@ python nico-scripts/kafka-streaming/dynamic_producer.py
 python nico-scripts/kafka-streaming/dynamic_consumer.py
 ```
 
-### **Spark Streaming (Terminal 4)**
+### **Spark Streaming + Redis (Terminal 4)**
 ```bash
-python nico-scripts/spark-streaming/kafka_streaming_analytics.py
+python nico-scripts/spark-streaming/realtime_metrics_producer.py
 ```
 
-### **Dashboard (Terminal 5)**
+### **Dashboard Real-time (Terminal 5)**
 ```bash
-streamlit run nico-scripts/dashboards/realtime_analytics_dashboard.py
+streamlit run nico-scripts/dashboards/realtime_spark_dashboard.py
 ```
 
 ---
@@ -110,6 +110,13 @@ docker logs spark-master -f
 docker logs spark-worker-1 -f
 ```
 
+### **Ver Métricas en Redis**
+```bash
+docker exec -it redis-metrics redis-cli
+> KEYS metrics:*
+> GET metrics:transactions
+```
+
 ### **Logs Generales Docker**
 ```bash
 docker-compose logs -f
@@ -133,18 +140,20 @@ docker-compose logs -f
 📈 Progreso: 10 eventos procesados
 ```
 
-### **Spark Streaming**
+### **Spark Streaming + Redis**
 ```
-INFO SparkContext: Starting Spark Streaming job
-INFO KafkaSource: Processing batch with 5 records
-INFO StreamingQueryManager: Streaming query progress: 10 events processed
+📊 Métricas de transacciones actualizadas: {'transaction_count': 5, 'total_revenue': 1250.50}
+📊 Métricas de comportamiento actualizadas: page_view = 12
+🚀 Streaming de métricas iniciado
 ```
 
-### **Dashboard**
+### **Dashboard Real-time**
 ```
-📊 Dashboard iniciado en http://localhost:8501
-📊 Conectado a DWH - 150 eventos disponibles
-🔄 Dashboard actualizado automáticamente
+⚡ InstaShop Real-time Spark Metrics
+🕐 Última actualización: 2025-09-16T22:50:00Z
+✅ Redis: Conectado
+✅ Spark: Procesando datos
+✅ Kafka: Datos fluyendo
 ```
 
 ---
@@ -164,6 +173,6 @@ sleep 30
 python nico-scripts/realistic_data_generator.py &
 python nico-scripts/kafka-streaming/dynamic_producer.py &
 python nico-scripts/kafka-streaming/dynamic_consumer.py &
-python nico-scripts/spark-streaming/kafka_streaming_analytics.py &
-streamlit run nico-scripts/dashboards/realtime_analytics_dashboard.py
+python nico-scripts/spark-streaming/realtime_metrics_producer.py &
+streamlit run nico-scripts/dashboards/realtime_spark_dashboard.py
 ```

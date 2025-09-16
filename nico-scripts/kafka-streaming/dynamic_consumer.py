@@ -232,20 +232,27 @@ class DynamicInstaShopKafkaConsumer:
         event_type = event.get('event_type')
         topic = message.topic
         
+        logger.info(f"🔄 Procesando evento: {event_type} desde topic {topic}")
+        
         try:
             if event_type == 'transaction':
+                logger.debug("💰 Procesando transacción...")
                 self.process_transaction_event(event)
             elif event_type == 'user_behavior':
+                logger.debug("👤 Procesando comportamiento de usuario...")
                 self.process_behavior_event(event)
             elif event_type == 'search':
+                logger.debug("🔍 Procesando búsqueda...")
                 self.process_search_event(event)
             elif event_type == 'cart_abandonment':
+                logger.debug("🛒 Procesando evento de carrito...")
                 self.process_cart_event(event)
             else:
                 logger.warning(f"⚠️ Tipo de evento desconocido: {event_type} en topic {topic}")
                 
         except Exception as e:
             logger.error(f"❌ Error procesando evento: {e}")
+            logger.error(f"❌ Evento que falló: {event}")
     
     def get_processing_stats(self):
         """Obtener estadísticas de procesamiento"""
@@ -280,13 +287,21 @@ class DynamicInstaShopKafkaConsumer:
         last_stats_time = start_time
         
         try:
+            logger.info("🔍 Esperando mensajes de Kafka...")
+            logger.info("📋 Topics suscritos: transactions, user_behavior, searches, cart_events")
+            logger.info("⏰ Consumer ejecutándose hasta que se reciban datos o se presione Ctrl+C")
+            
             for message in self.consumer:
                 if time.time() > end_time:
                     break
                 
-                logger.info(f"📨 Mensaje recibido de topic: {message.topic}")
+                logger.info(f"📨 Mensaje recibido de topic: {message.topic}, offset: {message.offset}")
+                logger.debug(f"📄 Contenido del mensaje: {message.value}")
+                
                 self.process_event(message)
                 event_count += 1
+                
+                logger.info(f"✅ Evento #{event_count} procesado exitosamente")
                 
                 # Mostrar estadísticas cada 30 segundos
                 if time.time() - last_stats_time >= 30:
@@ -295,6 +310,8 @@ class DynamicInstaShopKafkaConsumer:
                         logger.info("📊 Estadísticas de procesamiento:")
                         for event_type, count in stats:
                             logger.info(f"   {event_type}: {count} eventos")
+                    else:
+                        logger.info("📊 No hay eventos procesados aún")
                     last_stats_time = time.time()
                 
         except KeyboardInterrupt:
