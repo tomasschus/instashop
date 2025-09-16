@@ -291,17 +291,34 @@ class DynamicInstaShopKafkaConsumer:
             logger.info("📋 Topics suscritos: transactions, user_behavior, searches, cart_events")
             logger.info("⏰ Consumer ejecutándose hasta que se reciban datos o se presione Ctrl+C")
             
-            for message in self.consumer:
-                if time.time() > end_time:
-                    break
+            # Log de heartbeat cada 10 segundos
+            heartbeat_time = time.time()
+            
+            while time.time() < end_time:
+                # Heartbeat cada 10 segundos
+                if time.time() - heartbeat_time >= 10:
+                    logger.info("💓 Consumer activo - esperando mensajes...")
+                    heartbeat_time = time.time()
                 
-                logger.info(f"📨 Mensaje recibido de topic: {message.topic}, offset: {message.offset}")
-                logger.debug(f"📄 Contenido del mensaje: {message.value}")
-                
-                self.process_event(message)
-                event_count += 1
-                
-                logger.info(f"✅ Evento #{event_count} procesado exitosamente")
+                # Intentar obtener mensaje con timeout
+                try:
+                    message = self.consumer.poll(timeout_ms=5000)  # 5 segundos timeout
+                    if message is None:
+                        continue
+                    
+                    for topic_partition, messages in message.items():
+                        for msg in messages:
+                            logger.info(f"📨 Mensaje recibido de topic: {msg.topic}, offset: {msg.offset}")
+                            logger.debug(f"📄 Contenido del mensaje: {msg.value}")
+                            
+                            self.process_event(msg)
+                            event_count += 1
+                            
+                            logger.info(f"✅ Evento #{event_count} procesado exitosamente")
+                            
+                except Exception as e:
+                    logger.error(f"❌ Error en poll: {e}")
+                    time.sleep(1)
                 
                 # Mostrar estadísticas cada 30 segundos
                 if time.time() - last_stats_time >= 30:
