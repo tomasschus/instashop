@@ -1,7 +1,8 @@
 # 🚀 InstaShop Big Data Pipeline - Nico Scripts
 
 > 📊 **Ver diagrama completo**: [ARCHITECTURE.md](./ARCHITECTURE.md)  
-> 🗄️ **Ver DER de bases de datos**: [DATABASE_ERD.md](./DATABASE_ERD.md)
+> 🗄️ **Ver DER de bases de datos**: [DATABASE_ERD.md](./DATABASE_ERD.md)  
+> 🏢 **Ver DER del Data Warehouse**: [DWH_ERD.md](./DWH_ERD.md)
 
 ## 📋 **Flujo Completo del Pipeline**
 
