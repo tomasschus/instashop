@@ -366,13 +366,22 @@ def main():
     col1, col2, col3 = st.columns(3)
     
     with col1:
-        st.plotly_chart(create_revenue_chart(transaction_metrics), use_container_width=True)
+        if transaction_metrics:
+            st.plotly_chart(create_revenue_chart(transaction_metrics), use_container_width=True)
+        else:
+            st.info("⏳ Esperando métricas de transacciones...")
     
     with col2:
-        st.plotly_chart(create_transaction_chart(transaction_metrics), use_container_width=True)
+        if transaction_metrics:
+            st.plotly_chart(create_transaction_chart(transaction_metrics), use_container_width=True)
+        else:
+            st.info("⏳ Esperando métricas de transacciones...")
     
     with col3:
-        st.plotly_chart(create_customers_chart(transaction_metrics), use_container_width=True)
+        if transaction_metrics:
+            st.plotly_chart(create_customers_chart(transaction_metrics), use_container_width=True)
+        else:
+            st.info("⏳ Esperando métricas de transacciones...")
     
     # Gráfico de comportamiento
     st.plotly_chart(create_behavior_chart(behavior_metrics), use_container_width=True)
@@ -522,7 +531,7 @@ def main():
             st.error("❌ Redis: Desconectado")
     
     with col2:
-        if transaction_metrics:
+        if transaction_metrics or product_metrics:
             st.success("✅ Spark: Procesando datos")
         else:
             st.warning("⚠️ Spark: Sin datos recientes")

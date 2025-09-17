@@ -36,9 +36,9 @@ class DynamicInstaShopKafkaConsumer:
             bootstrap_servers=['localhost:9092', 'localhost:9093', 'localhost:9094'],
             value_deserializer=lambda m: json.loads(m.decode('utf-8')),
             key_deserializer=lambda m: m.decode('utf-8') if m else None,
-            group_id='instashop-dynamic-group-new',
-            auto_offset_reset='latest',  # Solo mensajes nuevos
-            enable_auto_commit=True,
+            group_id=f'instashop-dynamic-group-{int(time.time())}',  # Group ID único
+            auto_offset_reset='earliest',  # Leer mensajes viejos
+            enable_auto_commit=False,  # Deshabilitar para debugging
             auto_commit_interval_ms=1000
         )
         
@@ -347,11 +347,14 @@ class DynamicInstaShopKafkaConsumer:
         end_time = start_time + (duration_minutes * 60)
         
         event_count = 0
+        empty_polls = 0
         last_stats_time = start_time
         
         try:
             logger.info("🔍 Esperando mensajes de Kafka...")
             logger.info("📋 Topics suscritos: transactions, user_behavior, searches, cart_events")
+            logger.info(f"🆔 Group ID: {self.consumer.config['group_id']}")
+            logger.info(f"⚙️ Auto offset reset: {self.consumer.config['auto_offset_reset']}")
             logger.info("⏰ Consumer ejecutándose hasta que se reciban datos o se presione Ctrl+C")
             
             # Log de heartbeat cada 10 segundos
@@ -365,8 +368,11 @@ class DynamicInstaShopKafkaConsumer:
                 
                 # Intentar obtener mensaje con timeout
                 try:
-                    message = self.consumer.poll(timeout_ms=5000)  # 5 segundos timeout
+                    message = self.consumer.poll(timeout_ms=1000)  # 1 segundo timeout más agresivo
                     if message is None:
+                        empty_polls += 1
+                        if empty_polls % 10 == 0:  # Log cada 10 polls vacíos
+                            logger.warning(f"⚠️ {empty_polls} polls vacíos consecutivos - ¿Hay mensajes en Kafka?")
                         continue
                     
                     for topic_partition, messages in message.items():
@@ -377,7 +383,11 @@ class DynamicInstaShopKafkaConsumer:
                             self.process_event(msg)
                             event_count += 1
                             
+                            # Commit manual después de procesar
+                            self.consumer.commit()
+                            
                             logger.info(f"✅ Evento #{event_count} procesado exitosamente")
+                            empty_polls = 0  # Resetear contador cuando recibimos mensaje
                             
                 except Exception as e:
                     logger.error(f"❌ Error en poll: {e}")

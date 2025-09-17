@@ -94,7 +94,7 @@ class DynamicInstaShopKafkaProducer:
                 SELECT transaction_id, buyer_id, customer_id, transaction_date, 
                        total_amount, payment_method, status
                 FROM Transaction 
-                WHERE transaction_date >= NOW() - INTERVAL '10 minutes'
+                WHERE transaction_date >= NOW() - INTERVAL '2 minutes'
                 ORDER BY transaction_date DESC
                 LIMIT %s
             """
@@ -284,23 +284,20 @@ class DynamicInstaShopKafkaProducer:
         start_time = time.time()
         end_time = start_time + (duration_minutes * 60)
         
-        processed_transactions = set()
-        processed_interactions = set()
+        # Sin protección contra duplicados - pushear todo
         
         while time.time() < end_time:
             try:
                 # Obtener transacciones recientes
-                recent_transactions = self.get_recent_transactions(5)
+                recent_transactions = self.get_recent_transactions(10)
                 # Log solo si hay transacciones
                 if recent_transactions:
                     logger.info(f"📤 Enviando {len(recent_transactions)} transacciones a Kafka")
                 
                 for transaction in recent_transactions:
-                    if transaction['transaction_id'] not in processed_transactions:
-                        event = self.create_transaction_event(transaction)
-                        logger.info(f"🔄 Transacción {transaction['transaction_id']} con {len(event.get('items', []))} items")
-                        self.send_event('transactions', event)
-                        processed_transactions.add(transaction['transaction_id'])
+                    event = self.create_transaction_event(transaction)
+                    logger.info(f"🔄 Transacción {transaction['transaction_id']} con {len(event.get('items', []))} items")
+                    self.send_event('transactions', event)
                 
                 # Obtener eventos de comportamiento recientes
                 recent_behaviors = self.get_recent_behavior_events(5)
@@ -309,19 +306,12 @@ class DynamicInstaShopKafkaProducer:
                     logger.info(f"📤 Enviando {len(recent_behaviors)} eventos de comportamiento a Kafka")
                 
                 for interaction in recent_behaviors:
-                    if interaction['interaction_id'] not in processed_interactions:
-                        event = self.create_behavior_event(interaction)
-                        self.send_event('user_behavior', event)
-                        processed_interactions.add(interaction['interaction_id'])
+                    event = self.create_behavior_event(interaction)
+                    self.send_event('user_behavior', event)
                 
-                # Log de progreso cada 10 segundos
-                total_processed = len(processed_transactions) + len(processed_interactions)
-                if total_processed == 0:
-                    # Solo log cada 30 segundos para no spamear
-                    if int(time.time()) % 30 == 0:
-                        logger.debug("⏳ Esperando datos nuevos...")
-                elif total_processed % 10 == 0 and total_processed > 0:
-                    logger.info(f"📈 Progreso: {total_processed} eventos procesados ({len(processed_transactions)} transacciones, {len(processed_interactions)} comportamientos)")
+                # Log de progreso cada 30 segundos
+                if int(time.time()) % 30 == 0:
+                    logger.info("💓 Producer activo - enviando datos a Kafka...")
                 
                 # Esperar antes de la siguiente consulta
                 time.sleep(2)  # Consultar cada 2 segundos

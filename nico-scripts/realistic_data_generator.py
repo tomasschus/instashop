@@ -774,13 +774,10 @@ class RealisticDataGenerator:
             
             # Insertar detalles de transacción
             for item in transaction_data['cart_items']:
-                # Buscar product_id por nombre (simplificado)
-                product_query = "SELECT product_id FROM Product WHERE name = %s LIMIT 1"
-                self.cursors["instashop"].execute(product_query, (item['product_name'],))
-                result = self.cursors["instashop"].fetchone()
+                # Usar el product_id que ya tenemos
+                product_id = item['product_id']
                 
-                if result:
-                    product_id = result[0]
+                if product_id:  # Solo insertar si tenemos un product_id válido
                     detail_query = """
                         INSERT INTO TransactionDetail (transaction_id, product_id, quantity, unit_price)
                         VALUES (%s, %s, %s, %s)
@@ -788,6 +785,8 @@ class RealisticDataGenerator:
                     self.cursors["instashop"].execute(detail_query, (
                         transaction_id, product_id, item['quantity'], item['price']
                     ))
+                else:
+                    logger.warning(f"⚠️ Producto sin ID válido: {item['product_name']}")
             
             self.conns["instashop"].commit()
             
