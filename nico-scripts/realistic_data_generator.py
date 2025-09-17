@@ -344,10 +344,6 @@ class RealisticDataGenerator:
                 dbname="ecommerce_db", user="ecommerce", password="ecommerce123", 
                 host="localhost", port="5435"
             ),
-            "dwh": psycopg2.connect(
-                dbname="dwh_db", user="dwh", password="dwh123", 
-                host="localhost", port="5436"
-            )
         }
 
     def _create_customer_profiles(self):
@@ -794,6 +790,43 @@ class RealisticDataGenerator:
             logger.error(f"❌ Error insertando transacción: {e}")
             self.conns["instashop"].rollback()
 
+    def _insert_user_behavior_event(self, event_data):
+        """Insertar evento de comportamiento en tabla UserBehavior"""
+        try:
+            # Obtener product_id si es relevante para el evento
+            product_id = None
+            if event_data['event_type'] in ['product_view', 'add_to_cart', 'remove_from_cart']:
+                product_id = random.randint(1, 10159)  # IDs de productos existentes
+            
+            # Preparar metadata como JSON
+            metadata = {}
+            if 'search_term' in event_data:
+                metadata['search_term'] = event_data['search_term']
+                metadata['results_count'] = event_data.get('results_count', 0)
+            elif 'product_category' in event_data:
+                metadata['product_name'] = event_data.get('product_name', '')
+                metadata['product_category'] = event_data.get('product_category', '')
+                metadata['product_price'] = event_data.get('product_price', 0)
+            
+            query = """
+                INSERT INTO UserBehavior (customer_id, event_type, product_id, session_id, timestamp, metadata)
+                VALUES (%s, %s, %s, %s, %s, %s)
+            """
+            
+            self.cursors["instashop"].execute(query, (
+                event_data['customer_id'],
+                event_data['event_type'],
+                product_id,
+                event_data['session_id'],
+                event_data['timestamp'],
+                json.dumps(metadata)
+            ))
+            
+            self.conns["instashop"].commit()
+            
+        except Exception as e:
+            logger.error(f"❌ Error insertando evento UserBehavior: {e}")
+            self.conns["instashop"].rollback()
 
     def _insert_behavior_event_to_crm(self, event_data):
         """Insertar evento de comportamiento en CRM usando tabla Interaction existente"""
@@ -864,7 +897,8 @@ class RealisticDataGenerator:
                 
                 else:  # 30% probabilidad de evento de comportamiento
                     behavior_event = self._generate_user_behavior_event()
-                    self._insert_behavior_event_to_crm(behavior_event)
+                    self._insert_user_behavior_event(behavior_event)  # Nueva tabla UserBehavior
+                    self._insert_behavior_event_to_crm(behavior_event)  # CRM existente
                     behavior_event_count += 1
                 
                 # Log de progreso cada 50 eventos para reducir spam

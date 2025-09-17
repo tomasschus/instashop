@@ -21,8 +21,20 @@ services:
       - "5432:5432"
     volumes:
       - ./data/postgres:/var/lib/postgresql/data
+    command: [
+      "postgres",
+      "-c", "wal_level=logical",
+      "-c", "max_replication_slots=10", 
+      "-c", "max_wal_senders=10",
+      "-c", "shared_preload_libraries=pg_stat_statements"
+    ]
     networks:
       - instashop-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U insta -d instashop"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   # CRM Database
   crm-db:
@@ -36,8 +48,20 @@ services:
       - "5433:5432"
     volumes:
       - ./data/crm:/var/lib/postgresql/data
+    command: [
+      "postgres",
+      "-c", "wal_level=logical",
+      "-c", "max_replication_slots=10", 
+      "-c", "max_wal_senders=10",
+      "-c", "shared_preload_libraries=pg_stat_statements"
+    ]
     networks:
       - instashop-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U crm -d crm_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   # ERP Database
   erp-db:
@@ -51,6 +75,13 @@ services:
       - "5434:5432"
     volumes:
       - ./data/erp:/var/lib/postgresql/data
+    command: [
+      "postgres",
+      "-c", "wal_level=logical",
+      "-c", "max_replication_slots=10", 
+      "-c", "max_wal_senders=10",
+      "-c", "shared_preload_libraries=pg_stat_statements"
+    ]
     networks:
       - instashop-net
 
@@ -66,6 +97,13 @@ services:
       - "5435:5432"
     volumes:
       - ./data/ecommerce:/var/lib/postgresql/data
+    command: [
+      "postgres",
+      "-c", "wal_level=logical",
+      "-c", "max_replication_slots=10", 
+      "-c", "max_wal_senders=10",
+      "-c", "shared_preload_libraries=pg_stat_statements"
+    ]
     networks:
       - instashop-net
 
@@ -84,71 +122,76 @@ services:
     networks:
       - instashop-net
 
-  # Kafka Cluster
+  # Kafka Cluster KRAFT
   kafka1:
     image: bitnami/kafka:latest
     container_name: kafka1
     environment:
       KAFKA_CFG_NODE_ID: 1
-      KAFKA_CFG_PROCESS_ROLES: broker,controller
+      KAFKA_CFG_PROCESS_ROLES: controller,broker
+      KAFKA_CFG_CONTROLLER_QUORUM_VOTERS: 1@kafka1:9093,2@kafka2:9093,3@kafka3:9093
+      KAFKA_CFG_LISTENERS: PLAINTEXT://:19092,EXTERNAL://:9092,CONTROLLER://:9093
+      KAFKA_CFG_ADVERTISED_LISTENERS: PLAINTEXT://kafka1:19092,EXTERNAL://localhost:9092
       KAFKA_CFG_CONTROLLER_LISTENER_NAMES: CONTROLLER
-      KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT
-      KAFKA_CFG_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
-      KAFKA_CFG_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
-      KAFKA_CLUSTER_ID: instashop-cluster-1
-      KAFKA_CFG_CONTROLLER_QUORUM_VOTERS: "1@kafka1:9093"
-      ALLOW_PLAINTEXT_LISTENER: "yes"
+      KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_CFG_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_CLUSTER_ID: "abcdefghijklmnopqrstuv"
+      KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE: true
+      ALLOW_PLAINTEXT_LISTENER: yes
     ports:
       - "9092:9092"
     volumes:
-      - kafka1_data:/bitnami/kafka/data
+      - kafka1_data:/bitnami/kafka
     networks:
       - instashop-net
-    healthcheck:
-      test: ["CMD", "kafka-topics.sh", "--list", "--bootstrap-server", "localhost:9092"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
 
   kafka2:
     image: bitnami/kafka:latest
     container_name: kafka2
     environment:
       KAFKA_CFG_NODE_ID: 2
-      KAFKA_CFG_PROCESS_ROLES: broker,controller
+      KAFKA_CFG_PROCESS_ROLES: controller,broker
+      KAFKA_CFG_CONTROLLER_QUORUM_VOTERS: 1@kafka1:9093,2@kafka2:9093,3@kafka3:9093
+      KAFKA_CFG_LISTENERS: PLAINTEXT://:19092,EXTERNAL://:9092,CONTROLLER://:9093
+      KAFKA_CFG_ADVERTISED_LISTENERS: PLAINTEXT://kafka2:19092,EXTERNAL://localhost:9093
       KAFKA_CFG_CONTROLLER_LISTENER_NAMES: CONTROLLER
-      KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT
-      KAFKA_CFG_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9093
-      KAFKA_CFG_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
-      KAFKA_CLUSTER_ID: instashop-cluster-2
-      KAFKA_CFG_CONTROLLER_QUORUM_VOTERS: "2@kafka2:9093"
-      ALLOW_PLAINTEXT_LISTENER: "yes"
+      KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_CFG_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_CLUSTER_ID: "abcdefghijklmnopqrstuv"
+      KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE: true
+      ALLOW_PLAINTEXT_LISTENER: yes
     ports:
       - "9093:9092"
     volumes:
-      - kafka2_data:/bitnami/kafka/data
+      - kafka2_data:/bitnami/kafka
     networks:
       - instashop-net
+    depends_on:
+      - kafka1
 
   kafka3:
     image: bitnami/kafka:latest
     container_name: kafka3
     environment:
       KAFKA_CFG_NODE_ID: 3
-      KAFKA_CFG_PROCESS_ROLES: broker,controller
+      KAFKA_CFG_PROCESS_ROLES: controller,broker
+      KAFKA_CFG_CONTROLLER_QUORUM_VOTERS: 1@kafka1:9093,2@kafka2:9093,3@kafka3:9093
+      KAFKA_CFG_LISTENERS: PLAINTEXT://:19092,EXTERNAL://:9092,CONTROLLER://:9093
+      KAFKA_CFG_ADVERTISED_LISTENERS: PLAINTEXT://kafka3:19092,EXTERNAL://localhost:9094
       KAFKA_CFG_CONTROLLER_LISTENER_NAMES: CONTROLLER
-      KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT
-      KAFKA_CFG_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9094
-      KAFKA_CFG_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
-      KAFKA_CLUSTER_ID: instashop-cluster-3
-      KAFKA_CFG_CONTROLLER_QUORUM_VOTERS: "3@kafka3:9093"
-      ALLOW_PLAINTEXT_LISTENER: "yes"
+      KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_CFG_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_CLUSTER_ID: "abcdefghijklmnopqrstuv"
+      KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE: true
+      ALLOW_PLAINTEXT_LISTENER: yes
     ports:
       - "9094:9092"
     volumes:
-      - kafka3_data:/bitnami/kafka/data
+      - kafka3_data:/bitnami/kafka
     networks:
       - instashop-net
+    depends_on:
+      - kafka1
 
   # Spark Master
   spark:
@@ -187,3 +230,27 @@ services:
       - redis_data:/data
     networks:
       - instashop-net
+
+  # Debezium Connect para CDC
+  debezium-connect:
+    image: debezium/connect:2.4
+    container_name: debezium-connect
+    ports:
+      - "8083:8083"
+    environment:
+      BOOTSTRAP_SERVERS: kafka1:19092,kafka2:19092,kafka3:19092
+      GROUP_ID: debezium-connect-group
+      CONFIG_STORAGE_TOPIC: debezium_configs
+      OFFSET_STORAGE_TOPIC: debezium_offsets
+      STATUS_STORAGE_TOPIC: debezium_statuses
+      CONFIG_STORAGE_REPLICATION_FACTOR: 1
+      OFFSET_STORAGE_REPLICATION_FACTOR: 1
+      STATUS_STORAGE_REPLICATION_FACTOR: 1
+    volumes:
+      - ./debezium-config:/debezium-config
+    networks:
+      - instashop-net
+    depends_on:
+      - kafka1
+      - postgres
+      - crm-db

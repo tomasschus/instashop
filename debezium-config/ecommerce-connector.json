@@ -1,0 +1,24 @@
+{
+  "name": "ecommerce-connector",
+  "config": {
+    "connector.class": "io.debezium.connector.postgresql.PostgresConnector",
+    "tasks.max": "1",
+    "database.hostname": "ecommerce-db",
+    "database.port": "5432",
+    "database.user": "ecommerce",
+    "database.password": "ecommerce123",
+    "database.dbname": "ecommerce_db",
+    "database.server.name": "ecommerce",
+    "slot.name": "ecommerce_slot",
+    "publication.name": "ecommerce_publication",
+    "table.include.list": "public.carrier,public.shipment",
+    "topic.prefix": "ecommerce",
+    "schema.history.internal.kafka.topic": "ecommerce.history",
+    "schema.history.internal.kafka.bootstrap.servers": "kafka1:19092,kafka2:19092,kafka3:19092",
+    "transforms": "route",
+    "transforms.route.type": "org.apache.kafka.connect.transforms.RegexRouter",
+    "transforms.route.regex": "([^.]+)\\.([^.]+)\\.([^.]+)",
+    "transforms.route.replacement": "$3",
+    "plugin.name": "pgoutput"
+  }
+}

@@ -1,40 +1,41 @@
-# 🚀 InstaShop Big Data Pipeline - Nico Scripts
+# 🚀 InstaShop Big Data Pipeline - Nico Scripts (CDC Architecture)
 
 > 📊 **Ver diagrama completo**: [ARCHITECTURE.md](./ARCHITECTURE.md)  
 > 🗄️ **Ver DER de bases de datos**: [DATABASE_ERD.md](./DATABASE_ERD.md)  
 > 🏢 **Ver DER del Data Warehouse**: [DWH_ERD.md](./DWH_ERD.md)
 
-## 📋 **Flujo Completo del Pipeline**
+## 📋 **Flujo CDC Completo del Pipeline**
 
 ### **1. 📊 Generación de Datos Realistas**
 - **Script**: `realistic_data_generator.py`
 - **Función**: Genera transacciones y eventos de comportamiento en tiempo real
-- **Datos**: Inserta en PostgreSQL (`instashop` y `crm_db`) usando timestamps UTC
+- **Datos**: Inserta en PostgreSQL (`instashop`, `crm_db`, `erp_db`, `ecommerce_db`) usando timestamps UTC
 - **Frecuencia**: ~10 eventos por segundo (70% transacciones, 30% comportamientos)
 - **Características**: Auto-inicialización de tablas, creación de datos básicos, manejo de secuencias PostgreSQL
 
-### **2. 📤 Producer Kafka Dinámico**
-- **Script**: `kafka-streaming/dynamic_producer.py`
-- **Función**: Lee datos recientes de PostgreSQL y los envía a Kafka
-- **Topics**: `transactions`, `user_behavior`, `searches`, `cart_events`
-- **Frecuencia**: Consulta cada 2 segundos, envía TODOS los datos (sin protección contra duplicados)
-- **Ventana**: Lee datos de los últimos 2 minutos
+### **2. 🔄 Debezium Change Data Capture (CDC)**
+- **Script**: `setup_debezium.py` + `init_postgres_cdc.py`
+- **Función**: Configuración automática de Debezium para capturar cambios en PostgreSQL
+- **Conectores**: 4 conectores CDC (InstashopDB, CRM, ERP, E-commerce)
+- **Topics CDC**: `transaction`, `customer`, `product`, `transactiondetail`, `interaction`, `stock`, `carrier`, `shipment`
+- **Configuración**: Logical replication, replication slots, publications automáticas
+- **Plugin**: `pgoutput` (nativo de PostgreSQL)
 
-### **3. 📥 Consumer Kafka**
-- **Script**: `kafka-streaming/dynamic_consumer.py`
-- **Función**: Consume mensajes de Kafka y los procesa
-- **Destino**: Almacena datos procesados en Data Warehouse (DWH)
-- **Tabla**: `realtime_events` en PostgreSQL DWH
-- **Configuración**: Group ID único, `auto_offset_reset='earliest'`, commit manual
-- **Envío adicional**: Envía eventos `transaction_item` enriquecidos a Kafka para Spark
+### **3. 📥 CDC Redis Producer**
+- **Script**: `cdc_redis_producer.py`
+- **Función**: Consume eventos CDC de Debezium y popula métricas en Redis
+- **Topics**: Todos los tópicos CDC de Debezium
+- **Destino**: Métricas agregadas en Redis para dashboard en tiempo real
+- **Características**: Procesamiento de eventos `create`, `update`, `delete`, `read`
+- **Métricas**: Contadores de transacciones, clientes, productos, revenue total/diario
 
 ### **4. ⚡ Spark Streaming + Redis**
 - **Script**: `spark-streaming/realtime_metrics_producer.py`
-- **Función**: Procesa streams de Kafka y envía métricas a Redis
-- **Topics**: `transactions`, `user_behavior`, `transaction_items`
+- **Función**: Procesa streams CDC de Kafka y envía métricas avanzadas a Redis
+- **Topics**: `transaction`, `customer`, `product`, `transaction_items` (renombrado por Debezium)
 - **Análisis**: Agregaciones en tiempo real (ventanas de 30 segundos)
-- **Métricas**: Transacciones, comportamiento, productos por categoría
-- **Salida**: Métricas almacenadas en Redis para dashboard en tiempo real
+- **Métricas**: Análisis avanzados de transacciones, categorías, comportamientos
+- **Salida**: Métricas complejas almacenadas en Redis para dashboard
 
 ### **5. 📊 Dashboard Streamlit + Redis + DWH**
 - **Script**: `dashboards/realtime_spark_dashboard.py`
@@ -45,7 +46,7 @@
 
 ---
 
-## 🚀 **Comandos de Ejecución**
+## 🚀 **Comandos de Ejecución CDC**
 
 ### **Activar Entorno Virtual**
 ```bash
@@ -57,58 +58,65 @@ source venv/bin/activate
 docker-compose up -d
 ```
 
+### **Configurar PostgreSQL para CDC**
+```bash
+python nico-scripts/init_postgres_cdc.py
+```
+
+### **Desplegar Conectores Debezium**
+```bash
+python nico-scripts/setup_debezium.py
+```
+
 ### **Generar Eventos en PostgreSQL**
 ```bash
 python nico-scripts/realistic_data_generator.py
 ```
 
-### **Producer Kafka (Terminal 2)**
+### **CDC Redis Producer (Terminal 2)**
 ```bash
-python nico-scripts/kafka-streaming/dynamic_producer.py
+python nico-scripts/cdc_redis_producer.py
 ```
 
-### **Consumer Kafka (Terminal 3)**
-```bash
-python nico-scripts/kafka-streaming/dynamic_consumer.py
-```
-
-### **Spark Streaming + Redis (Terminal 4)**
+### **Spark Streaming + Redis (Terminal 3)**
 ```bash
 python nico-scripts/spark-streaming/realtime_metrics_producer.py
 ```
 
-### **Dashboard Real-time (Terminal 5)**
+### **Dashboard Real-time (Terminal 4)**
 ```bash
 streamlit run nico-scripts/dashboards/realtime_spark_dashboard.py
 ```
 
 ---
 
-## 🔍 **Comandos de Monitoreo**
+## 🔍 **Comandos de Monitoreo CDC**
 
-### **Ver Topics de Kafka**
+### **Ver Topics CDC de Kafka**
 ```bash
-docker exec -it kafka1 kafka-topics.sh --list --bootstrap-server localhost:9092
+docker exec kafka1 kafka-topics.sh --list --bootstrap-server localhost:19092
 ```
 
-### **Ver Mensajes Kafka - Transactions**
+### **Ver Mensajes CDC - Transactions**
 ```bash
-docker exec -it kafka1 kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic transactions --from-beginning
+docker exec kafka1 kafka-console-consumer.sh --bootstrap-server localhost:19092 --topic transaction --from-beginning --max-messages 1
 ```
 
-### **Ver Mensajes Kafka - User Behavior**
+### **Ver Mensajes CDC - Customers**
 ```bash
-docker exec -it kafka1 kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic user_behavior --from-beginning
+docker exec kafka1 kafka-console-consumer.sh --bootstrap-server localhost:19092 --topic customer --from-beginning --max-messages 1
 ```
 
-### **Ver Eventos en DWH**
+### **Ver Estado de Conectores Debezium**
 ```bash
-docker exec -it postgres-dwh psql -U dwh -d dwh_db -c "SELECT COUNT(*) FROM realtime_events;"
+curl -s http://localhost:8083/connectors | jq
+curl -s http://localhost:8083/connectors/instashop-connector/status | jq
 ```
 
-### **Ver Eventos Recientes en DWH**
+### **Ver Métricas CDC en Redis**
 ```bash
-docker exec -it postgres-dwh psql -U dwh -d dwh_db -c "SELECT event_type, customer_id, timestamp, processed_at FROM realtime_events ORDER BY processed_at DESC LIMIT 5;"
+docker exec redis-metrics redis-cli GET "metrics:dashboard"
+docker exec redis-metrics redis-cli KEYS "metrics:*"
 ```
 
 ### **Logs de Spark Master**
@@ -209,12 +217,15 @@ docker-compose logs -f
 - **Redis**: Para métricas en tiempo real
 - **Streamlit**: Para dashboard interactivo
 
-### **Topics de Kafka**
-- `transactions`: Eventos de transacciones
-- `user_behavior`: Eventos de comportamiento de usuarios
-- `searches`: Eventos de búsqueda
-- `cart_events`: Eventos de carrito
-- `transaction_items`: Eventos enriquecidos de items de transacción
+### **Topics CDC de Kafka**
+- `transaction`: Eventos CDC de transacciones (InstashopDB)
+- `customer`: Eventos CDC de clientes (InstashopDB)
+- `product`: Eventos CDC de productos (InstashopDB)
+- `transactiondetail`: Eventos CDC de detalles de transacción (InstashopDB)
+- `interaction`: Eventos CDC de interacciones (CRM)
+- `stock`: Eventos CDC de inventario (ERP)
+- `carrier`: Eventos CDC de transportistas (E-commerce)
+- `shipment`: Eventos CDC de envíos (E-commerce)
 
 ---
 
@@ -242,14 +253,21 @@ docker-compose logs -f
 
 ---
 
-## ⚡ **Comando Rápido (Todo en Secuencia)**
+## ⚡ **Comando Rápido CDC (Todo en Secuencia)**
 ```bash
+# 1. Activar entorno e iniciar servicios
 source venv/bin/activate
 docker-compose up -d
-sleep 30
+sleep 60
+
+# 2. Configurar CDC
+python nico-scripts/init_postgres_cdc.py
+python nico-scripts/setup_debezium.py
+sleep 10
+
+# 3. Iniciar pipeline CDC
 python nico-scripts/realistic_data_generator.py &
-python nico-scripts/kafka-streaming/dynamic_producer.py &
-python nico-scripts/kafka-streaming/dynamic_consumer.py &
+python nico-scripts/cdc_redis_producer.py &
 python nico-scripts/spark-streaming/realtime_metrics_producer.py &
 streamlit run nico-scripts/dashboards/realtime_spark_dashboard.py
 ```

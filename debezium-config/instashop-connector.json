@@ -1,0 +1,27 @@
+{
+  "name": "instashop-connector",
+  "config": {
+    "connector.class": "io.debezium.connector.postgresql.PostgresConnector",
+    "tasks.max": "1",
+    "database.hostname": "postgres",
+    "database.port": "5432",
+    "database.user": "insta",
+    "database.password": "insta123",
+    "database.dbname": "instashop",
+    "database.server.name": "instashop",
+    "slot.name": "instashop_slot",
+    "publication.name": "instashop_publication",
+    "table.include.list": "public.transaction,public.transactiondetail,public.customer,public.product,public.userbehavior",
+    "topic.prefix": "instashop",
+    "schema.history.internal.kafka.topic": "instashop.history",
+    "schema.history.internal.kafka.bootstrap.servers": "kafka1:19092,kafka2:19092,kafka3:19092",
+    "transforms": "route,alias",
+    "transforms.route.type": "org.apache.kafka.connect.transforms.RegexRouter",
+    "transforms.route.regex": "([^.]+)\\.([^.]+)\\.([^.]+)",
+    "transforms.route.replacement": "$3",
+    "transforms.alias.type": "org.apache.kafka.connect.transforms.RegexRouter",
+    "transforms.alias.regex": "transactiondetail",
+    "transforms.alias.replacement": "transaction_items",
+    "plugin.name": "pgoutput"
+  }
+}

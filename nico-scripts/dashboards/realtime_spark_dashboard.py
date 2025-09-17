@@ -50,14 +50,20 @@ def get_dwh_connection():
         return None
 
 def get_transaction_metrics(redis_client):
-    """Obtener métricas de transacciones de Redis"""
+    """Obtener métricas de transacciones de Redis (CDC Spark)"""
     try:
-        data = redis_client.get("metrics:transactions")
-        if data:
-            return json.loads(data)
-        else:
-            st.warning("⚠️ No hay datos de transacciones en Redis")
-            return None
+        # Intentar primero las métricas CDC Spark
+        cdc_data = redis_client.get("cdc_spark_metrics:transactions")
+        if cdc_data:
+            return json.loads(cdc_data)
+        
+        # Fallback a métricas legacy
+        legacy_data = redis_client.get("metrics:transactions")
+        if legacy_data:
+            return json.loads(legacy_data)
+        
+        st.warning("⚠️ No hay datos de transacciones en Redis")
+        return None
     except Exception as e:
         st.error(f"❌ Error obteniendo métricas de transacciones: {e}")
         return None
@@ -81,9 +87,14 @@ def get_behavior_metrics(redis_client):
         return {}
 
 def get_product_metrics(redis_client):
-    """Obtener métricas de productos de Redis"""
+    """Obtener métricas de productos de Redis (CDC Spark)"""
     try:
-        # Buscar todos los keys de productos
+        # Intentar primero las métricas CDC Spark
+        cdc_data = redis_client.get("cdc_spark_metrics:products")
+        if cdc_data:
+            return {"cdc_products": json.loads(cdc_data)}
+        
+        # Fallback a métricas legacy
         product_keys = redis_client.keys("metrics:products:*")
         metrics = {}
         
@@ -251,10 +262,31 @@ def create_product_chart(product_metrics):
     revenues = []
     sales = []
     
-    for category, data in product_metrics.items():
-        categories.append(category.title())
-        revenues.append(data.get('category_revenue', 0))
-        sales.append(data.get('product_sales', 0))
+    # Manejar datos CDC (formato lista) vs legacy (formato dict)
+    if "cdc_products" in product_metrics:
+        # Datos CDC: agregar por categoría
+        cdc_data = product_metrics["cdc_products"]
+        if cdc_data:
+            # Agrupar por categoría desde la lista CDC
+            category_totals = {}
+            for item in cdc_data:
+                cat = item.get('category', 'unknown')
+                if cat not in category_totals:
+                    category_totals[cat] = {'revenue': 0, 'sales': 0}
+                category_totals[cat]['revenue'] += item.get('category_revenue', 0)
+                category_totals[cat]['sales'] += item.get('product_sales', 0)
+            
+            # Convertir a listas para el gráfico
+            for cat, totals in category_totals.items():
+                categories.append(cat.title())
+                revenues.append(totals['revenue'])
+                sales.append(totals['sales'])
+    else:
+        # Datos legacy: usar keys separadas metrics:products:*
+        for category, data in product_metrics.items():
+            categories.append(category.title())
+            revenues.append(data.get('category_revenue', 0))
+            sales.append(data.get('product_sales', 0))
     
     fig = go.Figure()
     fig.add_trace(go.Bar(
