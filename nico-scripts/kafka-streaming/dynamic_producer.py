@@ -150,9 +150,13 @@ class DynamicInstaShopKafkaProducer:
                 WHERE td.transaction_id = %s
             """
             cursor.execute(query, (transaction_id,))
-            return cursor.fetchall()
+            details = cursor.fetchall()
+            logger.info(f"🔍 Transacción {transaction_id}: {len(details)} detalles encontrados")
+            if details:
+                logger.info(f"📋 Primer detalle: {details[0]}")
+            return details
         except Exception as e:
-            logger.error(f"❌ Error obteniendo detalles de transacción: {e}")
+            logger.error(f"❌ Error obteniendo detalles de transacción {transaction_id}: {e}")
             return []
     
     def get_recent_behavior_events(self, limit=10):
@@ -219,6 +223,18 @@ class DynamicInstaShopKafkaProducer:
         """Crear evento de transacción para Kafka"""
         details = self.get_transaction_details(transaction['transaction_id'])
         
+        items = [
+            {
+                'product_name': detail['product_name'],
+                'category': detail['category'],
+                'quantity': detail['quantity'],
+                'unit_price': float(detail['unit_price']),
+                'product_price': float(detail['product_price'])
+            } for detail in details
+        ]
+        
+        logger.info(f"🛒 Transacción {transaction['transaction_id']}: {len(items)} items en evento")
+        
         event = {
             'event_type': 'transaction',
             'timestamp': transaction['transaction_date'].isoformat(),
@@ -232,15 +248,7 @@ class DynamicInstaShopKafkaProducer:
             'total_amount': float(transaction['total_amount']),
             'payment_method': transaction['payment_method'],
             'status': transaction['status'],
-            'items': [
-                {
-                    'product_name': detail['product_name'],
-                    'category': detail['category'],
-                    'quantity': detail['quantity'],
-                    'unit_price': float(detail['unit_price']),
-                    'product_price': float(detail['product_price'])
-                } for detail in details
-            ],
+            'items': items,
             'source': 'postgresql_realtime'
         }
         return event
@@ -290,6 +298,7 @@ class DynamicInstaShopKafkaProducer:
                 for transaction in recent_transactions:
                     if transaction['transaction_id'] not in processed_transactions:
                         event = self.create_transaction_event(transaction)
+                        logger.info(f"🔄 Transacción {transaction['transaction_id']} con {len(event.get('items', []))} items")
                         self.send_event('transactions', event)
                         processed_transactions.add(transaction['transaction_id'])
                 

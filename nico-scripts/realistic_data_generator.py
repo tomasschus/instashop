@@ -234,15 +234,111 @@ class RealisticDataGenerator:
             return 'regular'
         else:
             return 'bargain_hunter'
+    
+    def _ensure_customer_exists(self, customer_id):
+        """Asegurar que el cliente existe en la base de datos"""
+        try:
+            cursor = self.cursors["instashop"]
+            
+            # Verificar si el cliente existe
+            query = "SELECT customer_id FROM Customer WHERE customer_id = %s"
+            cursor.execute(query, (customer_id,))
+            result = cursor.fetchone()
+            
+            if not result:
+                # Crear cliente
+                insert_query = """
+                    INSERT INTO Customer (customer_id, name, business_name, email, phone, subscription_plan)
+                    VALUES (%s, %s, %s, %s, %s, %s)
+                """
+                cursor.execute(insert_query, (
+                    customer_id,
+                    f"Cliente {customer_id}",
+                    f"Empresa {customer_id}",
+                    f"cliente{customer_id}@example.com",
+                    f"+123456789{customer_id:03d}",
+                    random.choice(['Free', 'Premium', 'Enterprise'])
+                ))
+                self.conns["instashop"].commit()
+                
+        except Exception as e:
+            logger.error(f"❌ Error creando cliente: {e}")
+    
+    def _ensure_buyer_exists(self, buyer_id):
+        """Asegurar que el comprador existe en la base de datos"""
+        try:
+            cursor = self.cursors["instashop"]
+            
+            # Verificar si el comprador existe
+            query = "SELECT buyer_id FROM Buyer WHERE buyer_id = %s"
+            cursor.execute(query, (buyer_id,))
+            result = cursor.fetchone()
+            
+            if not result:
+                # Crear comprador
+                insert_query = """
+                    INSERT INTO Buyer (buyer_id, name, email, phone, shipping_address)
+                    VALUES (%s, %s, %s, %s, %s)
+                """
+                cursor.execute(insert_query, (
+                    buyer_id,
+                    f"Comprador {buyer_id}",
+                    f"buyer{buyer_id}@example.com",
+                    f"+987654321{buyer_id:03d}",
+                    f"Dirección {buyer_id}, Ciudad"
+                ))
+                self.conns["instashop"].commit()
+                
+        except Exception as e:
+            logger.error(f"❌ Error creando comprador {buyer_id}: {e}")
+    
+    def _get_or_create_product(self, product_name, category, base_price, description, customer_id):
+        """Obtener o crear producto en la base de datos"""
+        try:
+            cursor = self.cursors["instashop"]
+            
+            # Buscar producto existente
+            query = "SELECT product_id FROM Product WHERE name = %s AND customer_id = %s"
+            cursor.execute(query, (product_name, customer_id))
+            result = cursor.fetchone()
+            
+            if result:
+                return result[0]
+            else:
+                # Crear nuevo producto
+                insert_query = """
+                    INSERT INTO Product (customer_id, name, description, category, price, currency, status)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    RETURNING product_id
+                """
+                cursor.execute(insert_query, (
+                    customer_id,
+                    product_name,
+                    description,
+                    category,
+                    base_price,
+                    'USD',
+                    'active'
+                ))
+                product_id = cursor.fetchone()[0]
+                self.conns["instashop"].commit()
+                return product_id
+                
+        except Exception as e:
+            logger.error(f"❌ Error obteniendo/creando producto: {e}")
+            return random.randint(1, 1000)  # Fallback
 
     def _generate_realistic_transaction(self):
         """Generar transacción realista"""
         # Obtener cliente activo o crear sesión nueva
         if not self.active_customers or random.random() < 0.3:
-            customer_id = random.randint(1, 100)  # Asumiendo 100 clientes
+            customer_id = random.randint(1, 500)  # Ampliar rango para evitar conflictos
             self.active_customers.add(customer_id)
         else:
             customer_id = random.choice(list(self.active_customers))
+        
+        # Asegurar que el cliente existe
+        self._ensure_customer_exists(customer_id)
         
         profile = self._get_customer_profile(customer_id)
         profile_data = self.customer_profiles[profile]
@@ -258,6 +354,9 @@ class RealisticDataGenerator:
         for _ in range(num_items):
             product_name, base_price, description = random.choice(products)
             
+            # Obtener product_id real de la base de datos
+            product_id = self._get_or_create_product(product_name, category, base_price, description, customer_id)
+            
             # Aplicar variación de precio estacional
             price_variation = self.product_catalog[category]['price_volatility']
             price_multiplier = random.uniform(1 - price_variation, 1 + price_variation)
@@ -266,6 +365,7 @@ class RealisticDataGenerator:
             quantity = random.randint(1, 3) if profile == 'bargain_hunter' else random.randint(1, 2)
             
             cart_items.append({
+                'product_id': product_id,
                 'product_name': product_name,
                 'price': final_price,
                 'quantity': quantity,
@@ -292,9 +392,16 @@ class RealisticDataGenerator:
         else:
             status = 'completed'
         
+        # Generar buyer_id
+        buyer_id = random.randint(1, 500)  # Ampliar rango para evitar conflictos
+        
+        # Asegurar que el comprador existe
+        self._ensure_buyer_exists(buyer_id)
+        
         return {
             'customer_id': customer_id,
             'customer_profile': profile,
+            'buyer_id': buyer_id,
             'cart_items': cart_items,
             'total_amount': round(total_amount, 2),
             'payment_method': payment_method,
@@ -359,7 +466,8 @@ class RealisticDataGenerator:
                 VALUES (%s, %s, %s, %s, %s, %s) RETURNING transaction_id
             """
             
-            buyer_id = random.randint(1, 500)  # Asumiendo 500 compradores
+            # Usar el buyer_id que ya verificamos en _generate_realistic_transaction
+            buyer_id = transaction_data['buyer_id']
             
             self.cursors["instashop"].execute(transaction_query, (
                 buyer_id,

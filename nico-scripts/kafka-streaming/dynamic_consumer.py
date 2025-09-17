@@ -8,7 +8,7 @@ import json
 import time
 import logging
 from datetime import datetime
-from kafka import KafkaConsumer
+from kafka import KafkaConsumer, KafkaProducer
 import psycopg2
 from psycopg2.extras import RealDictCursor
 
@@ -36,10 +36,16 @@ class DynamicInstaShopKafkaConsumer:
             bootstrap_servers=['localhost:9092', 'localhost:9093', 'localhost:9094'],
             value_deserializer=lambda m: json.loads(m.decode('utf-8')),
             key_deserializer=lambda m: m.decode('utf-8') if m else None,
-            group_id='instashop-dynamic-group',
+            group_id='instashop-dynamic-group-new',
             auto_offset_reset='latest',  # Solo mensajes nuevos
             enable_auto_commit=True,
             auto_commit_interval_ms=1000
+        )
+        
+        # Conectar a Kafka Producer para enviar eventos procesados
+        self.producer = KafkaProducer(
+            bootstrap_servers=['localhost:9092', 'localhost:9093', 'localhost:9094'],
+            value_serializer=lambda x: json.dumps(x).encode('utf-8')
         )
         
         # Conectar a DWH
@@ -78,10 +84,19 @@ class DynamicInstaShopKafkaConsumer:
             """
             
             cursor.execute(create_table_sql)
+            
+            # Agregar columna source si no existe (para tablas existentes)
+            try:
+                alter_table_sql = "ALTER TABLE realtime_events ADD COLUMN IF NOT EXISTS source VARCHAR(50) DEFAULT 'kafka_consumer';"
+                cursor.execute(alter_table_sql)
+                logger.info("✅ Columna 'source' verificada/agregada")
+            except Exception as alter_error:
+                logger.warning(f"⚠️ Advertencia al verificar columna source: {alter_error}")
+            
             self.dwh_conn.commit()
             cursor.close()
             
-            logger.info("✅ Tabla realtime_events creada en DWH")
+            logger.info("✅ Tabla realtime_events creada/actualizada en DWH")
         except Exception as e:
             logger.error(f"❌ Error creando tabla: {e}")
     
@@ -90,19 +105,17 @@ class DynamicInstaShopKafkaConsumer:
         try:
             cursor = self.dwh_conn.cursor()
             
+            # Insertar evento principal de transacción
             insert_sql = """
             INSERT INTO realtime_events 
             (event_type, timestamp, customer_id, customer_name, product_id, product_name, 
-             category, amount, raw_data)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+             category, amount, raw_data, source)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """
             
             # Extraer datos del evento
             customer_id = event.get('customer_id')
             customer_name = event.get('customer_name')
-            product_id = event.get('product_id')
-            product_name = event.get('product_name')
-            category = event.get('category')
             amount = event.get('total_amount')
             
             cursor.execute(insert_sql, (
@@ -110,17 +123,67 @@ class DynamicInstaShopKafkaConsumer:
                 datetime.fromisoformat(event['timestamp']),
                 customer_id,
                 customer_name,
-                product_id,
-                product_name,
-                category,
+                None,  # product_id para transacción principal
+                None,  # product_name para transacción principal
+                None,  # category para transacción principal
                 amount,
-                json.dumps(event)
+                json.dumps(event),
+                'kafka_consumer'
             ))
+            
+            # Insertar eventos individuales para cada item
+            items = event.get('items', [])
+            for item in items:
+                item_insert_sql = """
+                INSERT INTO realtime_events 
+                (event_type, timestamp, customer_id, customer_name, product_id, product_name, 
+                 category, amount, raw_data, source)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                """
+                
+                cursor.execute(item_insert_sql, (
+                    'transaction_item',
+                    datetime.fromisoformat(event['timestamp']),
+                    customer_id,
+                    customer_name,
+                    item.get('product_id'),
+                    item.get('product_name'),
+                    item.get('category'),
+                    item.get('product_price', 0),
+                    json.dumps(item),
+                    'kafka_consumer'
+                ))
+                
+                # Enviar evento transaction_item enriquecido a Kafka para Spark
+                transaction_item_event = {
+                    'event_type': 'transaction_item',
+                    'timestamp': event['timestamp'],
+                    'transaction_id': event['transaction_id'],
+                    'customer_id': customer_id,
+                    'customer_name': customer_name,
+                    'customer_subscription': event.get('subscription_plan'),
+                    'buyer_id': event.get('buyer_id'),
+                    'buyer_name': event.get('buyer_name'),
+                    'buyer_email': event.get('buyer_email'),
+                    'product_id': item.get('product_id'),
+                    'product_name': item.get('product_name'),
+                    'category': item.get('category'),
+                    'amount': item.get('product_price', 0),
+                    'quantity': item.get('quantity', 1),
+                    'unit_price': item.get('unit_price', 0),
+                    'total_transaction_amount': event.get('total_amount', 0),
+                    'payment_method': event.get('payment_method'),
+                    'transaction_status': event.get('status'),
+                    'source': 'kafka_consumer'
+                }
+                
+                self.producer.send('transaction_items', value=transaction_item_event)
+                logger.info(f"📤 Enviado transaction_item a Kafka: {item.get('product_name')} ({item.get('category')})")
             
             self.dwh_conn.commit()
             cursor.close()
             
-            logger.info(f"✅ Transacción procesada: {customer_name} - ${amount}")
+            logger.info(f"✅ Transacción procesada: {customer_name} - ${amount} ({len(items)} items)")
             
         except Exception as e:
             logger.error(f"❌ Error procesando transacción: {e}")
