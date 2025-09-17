@@ -45,7 +45,285 @@ class RealisticDataGenerator:
         self.session_data = defaultdict(dict)
         self.running = True
         
+        # Verificar e inicializar datos básicos si es necesario
+        self._initialize_basic_data()
+        
         logger.info("🚀 RealisticDataGenerator inicializado")
+
+    def _initialize_basic_data(self):
+        """Inicializar datos básicos si las tablas están vacías"""
+        try:
+            # Verificar si las tablas existen y están vacías
+            cursor = self.cursors["instashop"]
+            
+            # Verificar si las tablas existen
+            cursor.execute("""
+                SELECT COUNT(*) FROM information_schema.tables 
+                WHERE table_schema = 'public' AND table_name IN ('customer', 'buyer', 'product')
+            """)
+            table_count = cursor.fetchone()[0]
+            
+            if table_count < 3:  # Si no existen las 3 tablas principales
+                logger.info("🔧 Tablas no existen, creando...")
+                self._create_tables_if_not_exist()
+                return
+            
+            # Verificar tabla Customer
+            cursor.execute("SELECT COUNT(*) FROM Customer")
+            customer_count = cursor.fetchone()[0]
+            
+            # Verificar tabla Buyer
+            cursor.execute("SELECT COUNT(*) FROM Buyer")
+            buyer_count = cursor.fetchone()[0]
+            
+            # Verificar tabla Product
+            cursor.execute("SELECT COUNT(*) FROM Product")
+            product_count = cursor.fetchone()[0]
+            
+            logger.info(f"📊 Estado inicial: {customer_count} clientes, {buyer_count} compradores, {product_count} productos")
+            
+            # Si no hay datos básicos, crearlos
+            if customer_count == 0:
+                logger.info("🔧 Inicializando datos básicos...")
+                self._create_initial_customers()
+                self._create_initial_buyers()
+                self._create_initial_products()
+                logger.info("✅ Datos básicos inicializados")
+            else:
+                logger.info("✅ Datos básicos ya existen")
+                # Verificar que las secuencias estén correctas
+                self._fix_sequences()
+                
+        except Exception as e:
+            logger.error(f"❌ Error verificando datos básicos: {e}")
+            logger.info("🔧 Intentando crear tablas...")
+            self._create_tables_if_not_exist()
+
+    def _create_tables_if_not_exist(self):
+        """Crear tablas si no existen"""
+        try:
+            # Crear nueva conexión para evitar problemas de transacción
+            conn = psycopg2.connect(
+                dbname="instashop", user="insta", password="insta123", 
+                host="localhost", port="5432"
+            )
+            cursor = conn.cursor()
+            
+            # Crear tabla Customer
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS Customer (
+                    customer_id BIGSERIAL PRIMARY KEY,
+                    name VARCHAR(100),
+                    business_name VARCHAR(150),
+                    email VARCHAR(100),
+                    phone VARCHAR(20),
+                    subscription_plan VARCHAR(50),
+                    logo_url VARCHAR(255),
+                    store_url VARCHAR(255)
+                )
+            """)
+            
+            # Crear tabla Buyer
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS Buyer (
+                    buyer_id BIGSERIAL PRIMARY KEY,
+                    name VARCHAR(100),
+                    email VARCHAR(100),
+                    phone VARCHAR(20),
+                    shipping_address VARCHAR(255)
+                )
+            """)
+            
+            # Crear tabla Product
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS Product (
+                    product_id BIGSERIAL PRIMARY KEY,
+                    customer_id BIGINT REFERENCES Customer(customer_id),
+                    name VARCHAR(150),
+                    description TEXT,
+                    category VARCHAR(100),
+                    price DECIMAL(12,2),
+                    currency VARCHAR(10),
+                    status VARCHAR(20),
+                    image_url VARCHAR(255)
+                )
+            """)
+            
+            # Crear tabla Transaction
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS Transaction (
+                    transaction_id BIGSERIAL PRIMARY KEY,
+                    buyer_id BIGINT REFERENCES Buyer(buyer_id),
+                    customer_id BIGINT REFERENCES Customer(customer_id),
+                    transaction_date TIMESTAMP,
+                    total_amount DECIMAL(12,2),
+                    payment_method VARCHAR(50),
+                    status VARCHAR(20)
+                )
+            """)
+            
+            # Crear tabla TransactionDetail
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS TransactionDetail (
+                    transaction_detail_id BIGSERIAL PRIMARY KEY,
+                    transaction_id BIGINT REFERENCES Transaction(transaction_id),
+                    product_id BIGINT REFERENCES Product(product_id),
+                    quantity INT,
+                    unit_price DECIMAL(12,2)
+                )
+            """)
+            
+            conn.commit()
+            logger.info("✅ Tablas de InstaShop creadas exitosamente")
+            
+            # Crear tabla Interaction en CRM
+            crm_conn = psycopg2.connect(
+                dbname="crm_db", user="crm", password="crm123", 
+                host="localhost", port="5433"
+            )
+            crm_cursor = crm_conn.cursor()
+            crm_cursor.execute("""
+                CREATE TABLE IF NOT EXISTS Interaction (
+                    interaction_id BIGSERIAL PRIMARY KEY,
+                    customer_id BIGINT,
+                    interaction_type VARCHAR(50),
+                    channel VARCHAR(50),
+                    interaction_date TIMESTAMP,
+                    status VARCHAR(20)
+                )
+            """)
+            crm_conn.commit()
+            logger.info("✅ Tabla Interaction en CRM creada exitosamente")
+            
+            # Cerrar conexiones temporales
+            cursor.close()
+            conn.close()
+            crm_cursor.close()
+            crm_conn.close()
+            
+            # Crear datos iniciales
+            self._create_initial_customers()
+            self._create_initial_buyers()
+            self._create_initial_products()
+            
+        except Exception as e:
+            logger.error(f"❌ Error creando tablas: {e}")
+            try:
+                conn.rollback()
+                conn.close()
+            except:
+                pass
+
+    def _fix_sequences(self):
+        """Arreglar las secuencias de PostgreSQL para evitar conflictos de IDs"""
+        try:
+            cursor = self.cursors["instashop"]
+            
+            # Arreglar secuencia de Customer
+            cursor.execute("SELECT setval('customer_customer_id_seq', (SELECT MAX(customer_id) FROM Customer));")
+            
+            # Arreglar secuencia de Buyer
+            cursor.execute("SELECT setval('buyer_buyer_id_seq', (SELECT MAX(buyer_id) FROM Buyer));")
+            
+            # Arreglar secuencia de Product
+            cursor.execute("SELECT setval('product_product_id_seq', (SELECT MAX(product_id) FROM Product));")
+            
+            # Arreglar secuencia de Transaction
+            cursor.execute("SELECT setval('transaction_transaction_id_seq', (SELECT MAX(transaction_id) FROM Transaction));")
+            
+            # Arreglar secuencia de TransactionDetail
+            cursor.execute("SELECT setval('transactiondetail_transaction_detail_id_seq', (SELECT MAX(transaction_detail_id) FROM TransactionDetail));")
+            
+            self.conns["instashop"].commit()
+            logger.info("✅ Secuencias de PostgreSQL arregladas")
+            
+        except Exception as e:
+            logger.error(f"❌ Error arreglando secuencias: {e}")
+            self.conns["instashop"].rollback()
+
+    def _create_initial_customers(self):
+        """Crear clientes iniciales"""
+        try:
+            cursor = self.cursors["instashop"]
+            
+            for i in range(1, 51):  # Crear 50 clientes iniciales
+                cursor.execute("""
+                    INSERT INTO Customer (customer_id, name, business_name, email, phone, subscription_plan)
+                    VALUES (%s, %s, %s, %s, %s, %s)
+                    ON CONFLICT (customer_id) DO NOTHING
+                """, (
+                    i,
+                    f"Cliente {i}",
+                    f"Empresa {i}",
+                    f"cliente{i}@example.com",
+                    f"+123456789{i:03d}",
+                    random.choice(['Free', 'Premium', 'Enterprise'])
+                ))
+            
+            self.conns["instashop"].commit()
+            logger.info("✅ 50 clientes iniciales creados")
+            
+        except Exception as e:
+            logger.error(f"❌ Error creando clientes iniciales: {e}")
+            self.conns["instashop"].rollback()
+
+    def _create_initial_buyers(self):
+        """Crear compradores iniciales"""
+        try:
+            cursor = self.cursors["instashop"]
+            
+            for i in range(1, 101):  # Crear 100 compradores iniciales
+                cursor.execute("""
+                    INSERT INTO Buyer (buyer_id, name, email, phone, shipping_address)
+                    VALUES (%s, %s, %s, %s, %s)
+                    ON CONFLICT (buyer_id) DO NOTHING
+                """, (
+                    i,
+                    f"Comprador {i}",
+                    f"buyer{i}@example.com",
+                    f"+987654321{i:03d}",
+                    f"Dirección {i}, Ciudad"
+                ))
+            
+            self.conns["instashop"].commit()
+            logger.info("✅ 100 compradores iniciales creados")
+            
+        except Exception as e:
+            logger.error(f"❌ Error creando compradores iniciales: {e}")
+            self.conns["instashop"].rollback()
+
+    def _create_initial_products(self):
+        """Crear productos iniciales"""
+        try:
+            cursor = self.cursors["instashop"]
+            
+            categories = ['Electronics', 'Fashion', 'Home', 'Books', 'Toys', 'Sports', 'Food', 'Basic', 'Accessories']
+            
+            for i in range(1, 201):  # Crear 200 productos iniciales
+                customer_id = random.randint(1, 50)
+                category = random.choice(categories)
+                
+                cursor.execute("""
+                    INSERT INTO Product (product_id, customer_id, name, description, category, price, currency, status)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                    ON CONFLICT (product_id) DO NOTHING
+                """, (
+                    i,
+                    customer_id,
+                    f"Producto {i}",
+                    f"Descripción del producto {i}",
+                    category,
+                    round(random.uniform(10, 500), 2),
+                    'USD',
+                    'active'
+                ))
+            
+            self.conns["instashop"].commit()
+            logger.info("✅ 200 productos iniciales creados")
+            
+        except Exception as e:
+            logger.error(f"❌ Error creando productos iniciales: {e}")
+            self.conns["instashop"].rollback()
 
     def _setup_connections(self):
         """Configurar conexiones a las bases de datos"""
@@ -326,7 +604,21 @@ class RealisticDataGenerator:
                 
         except Exception as e:
             logger.error(f"❌ Error obteniendo/creando producto: {e}")
-            return random.randint(1, 1000)  # Fallback
+            # Rollback para limpiar la transacción abortada
+            try:
+                self.conns["instashop"].rollback()
+            except:
+                pass
+            # Fallback: buscar un producto existente aleatorio
+            try:
+                cursor.execute("SELECT product_id FROM Product ORDER BY RANDOM() LIMIT 1")
+                result = cursor.fetchone()
+                if result:
+                    return result[0]
+                else:
+                    return None
+            except:
+                return None
 
     def _generate_realistic_transaction(self):
         """Generar transacción realista"""

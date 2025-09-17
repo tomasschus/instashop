@@ -51,6 +51,8 @@ class RealtimeMetricsProducer:
             StructField("search_term", StringType(), True),
             StructField("category", StringType(), True),
             StructField("amount", DoubleType(), True),
+            StructField("quantity", IntegerType(), True),  # Agregar quantity al schema principal
+            StructField("unit_price", DoubleType(), True),  # Agregar unit_price al schema principal
             StructField("source", StringType(), True),
             StructField("items", ArrayType(StructType([
                 StructField("product_name", StringType(), True),
@@ -119,8 +121,8 @@ class RealtimeMetricsProducer:
                 sum("amount").alias("category_revenue"),
                 avg("amount").alias("avg_category_value"),
                 sum("quantity").alias("total_quantity"),
-                countDistinct("customer_id").alias("unique_customers"),
-                countDistinct("product_id").alias("unique_products")
+                approx_count_distinct("customer_id").alias("unique_customers"),
+                approx_count_distinct("product_id").alias("unique_products")
             )
     
     def write_to_redis(self, df, epoch_id):
