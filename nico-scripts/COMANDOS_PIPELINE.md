@@ -1,6 +1,6 @@
-# 🚀 Comandos para Ejecutar el Pipeline Completo
+# 🚀 Comandos para Ejecutar el Pipeline CDC Completo
 
-## 📋 Lista de Comandos Paso a Paso
+## 📋 Lista de Comandos Paso a Paso - Dual Pipeline CDC
 
 ### **1. 🐍 Activar Entorno Virtual**
 ```bash
@@ -20,40 +20,40 @@ docker-compose up -d
 docker-compose ps
 ```
 
-### **3. 📊 Generar Eventos en PostgreSQL**
+### **3. 🔧 Configurar CDC (Change Data Capture)**
 ```bash
-# Ejecutar generador de datos realistas
-python nico-scripts/realistic_data_generator.py
+# Configurar PostgreSQL para CDC
+python nico-scripts/init_postgres_cdc.py
 
-# O usar el script de setup
-python nico-scripts/setup_and_run.py
+# Desplegar conectores Debezium
+python nico-scripts/setup_debezium.py
 ```
 
-### **4. 📤 Ver Logs de Pusheo a Kafka (Producer)**
+### **4. 📊 Generar Eventos en PostgreSQL**
+```bash
+# Generar datos iniciales
+python fake-data.py
+
+# Ejecutar generador de datos realistas (CDC automático)
+python nico-scripts/realistic_data_generator.py
+```
+
+### **5. 🗄️ Pipeline Histórico: CDC → Data Warehouse**
 ```bash
 # En una nueva terminal (mantener activado el venv)
 source venv/bin/activate
 
-# Ejecutar producer dinámico
-python nico-scripts/kafka-streaming/dynamic_producer.py
+# Ejecutar consumer CDC → DWH
+python nico-scripts/cdc_dwh_consumer.py
 ```
 
-### **5. 📥 Ver Logs de Consumo Kafka (Consumer)**
+### **6. ⚡ Pipeline Tiempo Real: CDC → Spark → Redis**
 ```bash
 # En otra nueva terminal (mantener activado el venv)
 source venv/bin/activate
 
-# Ejecutar consumer dinámico
-python nico-scripts/kafka-streaming/dynamic_consumer.py
-```
-
-### **6. ⚡ Ver Logs de Spark Streaming**
-```bash
-# En otra nueva terminal (mantener activado el venv)
-source venv/bin/activate
-
-# Ejecutar Spark Streaming desde Kafka
-python nico-scripts/spark-streaming/kafka_streaming_analytics.py
+# Ejecutar Spark Streaming CDC → Redis
+python nico-scripts/spark-streaming/cdc_spark_redis.py
 ```
 
 ### **7. 📊 Levantar Dashboard**
@@ -61,47 +61,40 @@ python nico-scripts/spark-streaming/kafka_streaming_analytics.py
 # En otra nueva terminal (mantener activado el venv)
 source venv/bin/activate
 
-# Ejecutar dashboard de Streamlit
-streamlit run nico-scripts/dashboards/realtime_analytics_dashboard.py
+# Ejecutar dashboard de Streamlit (CDC + Spark + Redis)
+streamlit run nico-scripts/dashboards/realtime_spark_dashboard.py
 ```
 
 ---
 
-## 🔄 Orden Recomendado de Ejecución
+## 🔄 Orden Recomendado de Ejecución - Dual Pipeline CDC
 
-### **Terminal 1: Generador de Datos**
+### **Terminal 1: Generador de Datos (CDC Automático)**
 ```bash
 cd /home/nicolas/Documents/uade/instashop
 source venv/bin/activate
 python nico-scripts/realistic_data_generator.py
 ```
 
-### **Terminal 2: Producer Kafka**
+### **Terminal 2: Pipeline Histórico (CDC → DWH)**
 ```bash
 cd /home/nicolas/Documents/uade/instashop
 source venv/bin/activate
-python nico-scripts/kafka-streaming/dynamic_producer.py
+python nico-scripts/cdc_dwh_consumer.py
 ```
 
-### **Terminal 3: Consumer Kafka**
+### **Terminal 3: Pipeline Tiempo Real (CDC → Spark → Redis)**
 ```bash
 cd /home/nicolas/Documents/uade/instashop
 source venv/bin/activate
-python nico-scripts/kafka-streaming/dynamic_consumer.py
+python nico-scripts/spark-streaming/cdc_spark_redis.py
 ```
 
-### **Terminal 4: Spark Streaming**
+### **Terminal 4: Dashboard (CDC + Spark + Redis)**
 ```bash
 cd /home/nicolas/Documents/uade/instashop
 source venv/bin/activate
-python nico-scripts/spark-streaming/kafka_streaming_analytics.py
-```
-
-### **Terminal 5: Dashboard**
-```bash
-cd /home/nicolas/Documents/uade/instashop
-source venv/bin/activate
-streamlit run nico-scripts/dashboards/realtime_analytics_dashboard.py
+streamlit run nico-scripts/dashboards/realtime_spark_dashboard.py
 ```
 
 ---
@@ -183,23 +176,44 @@ docker-compose logs -f --tail=100
 
 ---
 
-## 📊 Pipeline Completo
+## 📊 Dual Pipeline CDC Completo
 
 ```
-PostgreSQL ──→ Producer ──→ Kafka ──→ Consumer ──→ DWH ──→ Dashboard
-    ↑              ↑           ↑         ↑         ↑
-realistic_data  dynamic_   Topics    dynamic_  Streamlit
-_generator.py   producer.py          consumer.py Dashboard
+PostgreSQL ──→ Debezium ──→ Kafka ──→ Python Consumer ──→ DWH ──→ Dashboard
+    ↑              ↑           ↑            ↑              ↑
+realistic_data  CDC Engine  CDC Topics   cdc_dwh_    Streamlit
+_generator.py   (Automatic)             consumer.py  Dashboard
                                     ↓
                                Spark Streaming
-                               (kafka_streaming_analytics.py)
+                               (cdc_spark_redis.py)
+                                    ↓
+                                  Redis
+                               (Real-time Cache)
 ```
+
+### 🔄 Flujos de Datos
+
+#### **Pipeline Histórico (DWH)**
+```
+PostgreSQL → Debezium → Kafka → Python Consumer → DWH PostgreSQL
+```
+- **Datos**: Eventos individuales preservados
+- **Propósito**: Análisis histórico y reportes
+- **Latencia**: Cerca de tiempo real
+
+#### **Pipeline Tiempo Real (Redis)**
+```
+PostgreSQL → Debezium → Kafka → Spark Streaming → Redis → Dashboard
+```
+- **Datos**: Métricas agregadas y calculadas
+- **Propósito**: Dashboard interactivo
+- **Latencia**: Sub-segundo
 
 ---
 
 ## ⚡ Comandos Rápidos
 
-### **Ejecutar Todo en Secuencia**
+### **Ejecutar Dual Pipeline CDC en Secuencia**
 ```bash
 # 1. Activar venv
 source venv/bin/activate
@@ -210,29 +224,40 @@ docker-compose up -d
 # 3. Esperar 30 segundos para que los servicios estén listos
 sleep 30
 
-# 4. Ejecutar generador (en background)
+# 4. Configurar CDC
+python nico-scripts/init_postgres_cdc.py
+python nico-scripts/setup_debezium.py
+
+# 5. Generar datos iniciales
+python fake-data.py
+
+# 6. Ejecutar generador CDC (en background)
 python nico-scripts/realistic_data_generator.py &
 
-# 5. Ejecutar producer (en background)
-python nico-scripts/kafka-streaming/dynamic_producer.py &
+# 7. Ejecutar pipeline histórico (en background)
+python nico-scripts/cdc_dwh_consumer.py &
 
-# 6. Ejecutar consumer (en background)
-python nico-scripts/kafka-streaming/dynamic_consumer.py &
+# 8. Ejecutar pipeline tiempo real (en background)
+python nico-scripts/spark-streaming/cdc_spark_redis.py &
 
-# 7. Ejecutar Spark (en background)
-python nico-scripts/spark-streaming/kafka_streaming_analytics.py &
-
-# 8. Levantar dashboard
-streamlit run nico-scripts/dashboards/realtime_analytics_dashboard.py
+# 9. Levantar dashboard
+streamlit run nico-scripts/dashboards/realtime_spark_dashboard.py
 ```
 
 ---
 
-## 🎉 ¡Listo para Ejecutar!
+## 🎉 ¡Dual Pipeline CDC Listo!
 
-Con estos comandos tienes todo el pipeline funcionando:
-- ✅ Generación de datos en PostgreSQL
-- ✅ Streaming a Kafka
-- ✅ Procesamiento con Spark
-- ✅ Dashboard en tiempo real
-- ✅ Monitoreo completo
+Con estos comandos tienes todo el sistema CDC funcionando:
+- ✅ **CDC Automático**: Debezium captura cambios de PostgreSQL
+- ✅ **Pipeline Histórico**: CDC → DWH para análisis histórico
+- ✅ **Pipeline Tiempo Real**: CDC → Spark → Redis para dashboard
+- ✅ **Dashboard Interactivo**: Métricas en tiempo real
+- ✅ **Monitoreo Completo**: Ambos pipelines funcionando simultáneamente
+
+### 🎯 Beneficios del Dual Pipeline CDC
+- **📊 Tiempo Real**: Dashboard con métricas actualizadas al instante
+- **🗄️ Histórico**: Datos preservados para análisis a largo plazo
+- **⚡ Escalabilidad**: Separación de responsabilidades
+- **🔄 Resiliencia**: Fallback entre sistemas
+- **🎨 Flexibilidad**: Diferentes latencias para diferentes necesidades

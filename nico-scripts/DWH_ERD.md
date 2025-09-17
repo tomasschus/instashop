@@ -1,6 +1,6 @@
 # 🏢 InstaShop Data Warehouse (DWH) - Diagrama Entidad-Relación
 
-## 📊 DER del Data Warehouse
+## 📊 DER del Data Warehouse - Dual Pipeline CDC
 
 ```mermaid
 erDiagram
@@ -217,11 +217,41 @@ GROUP BY outcome;
 - **DWH**: Datos históricos para análisis
 - **Streamlit**: Visualización combinada de ambas fuentes
 
-## 🚀 Uso en el Pipeline
+## 🚀 Dual Pipeline CDC - Uso en el Sistema
 
-1. **Consumer Kafka** → Inserta eventos en `RealtimeEvents`
-2. **Spark Streaming** → Lee de Kafka y genera métricas en Redis
-3. **Dashboard** → Combina datos de Redis (tiempo real) + DWH (histórico)
-4. **Análisis** → Consultas SQL para reportes y métricas
+### **🔄 Flujo Completo CDC**
 
-¡El DWH está optimizado para análisis en tiempo real e histórico! 🎉
+```mermaid
+graph TB
+    A[PostgreSQL] --> B[Debezium CDC]
+    B --> C[Kafka Topics]
+    C --> D[Python Consumer]
+    C --> E[Spark Streaming]
+    D --> F[DWH PostgreSQL]
+    E --> G[Redis Cache]
+    F --> H[Dashboard Histórico]
+    G --> I[Dashboard Tiempo Real]
+    H --> J[Streamlit Dashboard]
+    I --> J
+```
+
+### **📊 Pipeline Histórico (DWH)**
+1. **CDC Consumer** → Inserta eventos individuales en `RealtimeEvents`
+2. **Datos Preservados** → Todos los eventos CDC almacenados
+3. **Análisis Histórico** → Consultas SQL para tendencias y patrones
+4. **Reportes** → Métricas a largo plazo y análisis temporal
+
+### **⚡ Pipeline Tiempo Real (Redis)**
+1. **Spark Streaming** → Procesa eventos CDC en tiempo real
+2. **Métricas Calculadas** → Agregaciones y KPIs en Redis
+3. **Dashboard Interactivo** → Visualizaciones actualizadas al instante
+4. **Latencia Sub-segundo** → Respuesta inmediata a cambios
+
+### **🎯 Beneficios del Dual Pipeline**
+- **📊 Tiempo Real**: Dashboard responsivo con métricas actualizadas
+- **🗄️ Histórico**: Datos preservados para análisis profundo
+- **⚡ Escalabilidad**: Separación de responsabilidades
+- **🔄 Resiliencia**: Fallback entre sistemas
+- **🎨 Flexibilidad**: Diferentes latencias para diferentes necesidades
+
+¡El DWH está optimizado para análisis en tiempo real e histórico con CDC! 🎉

@@ -92,9 +92,11 @@ def process_transactions_batch(df, batch_id):
         for row in transactions.select("total_amount_raw").collect():
             amount = decode_decimal_amount(row["total_amount_raw"])
             amounts.append(amount)
-        
+
         total_revenue = sum(amounts) if amounts else 0.0
         avg_amount = total_revenue / total_transactions if total_transactions > 0 else 0.0
+        max_amount = max(amounts) if amounts else 0.0
+        min_amount = min(amounts) if amounts else 0.0
         
         # Contar por método de pago
         payment_methods = {}
@@ -107,6 +109,8 @@ def process_transactions_batch(df, batch_id):
             "total_transactions": total_transactions,
             "total_revenue": round(total_revenue, 2),
             "avg_amount": round(avg_amount, 2),
+            "max_transaction": round(max_amount, 2),
+            "min_transaction": round(min_amount, 2),
             "unique_customers": unique_customers,
             "payment_methods": payment_methods,
             "timestamp": datetime.now(timezone.utc).isoformat(),
@@ -119,6 +123,9 @@ def process_transactions_batch(df, batch_id):
         print(f"✅ Métricas guardadas:")
         print(f"   📊 Transacciones: {total_transactions}")
         print(f"   💰 Revenue: ${total_revenue:,.2f}")
+        print(f"   📈 Promedio: ${avg_amount:,.2f}")
+        print(f"   🔺 Máxima: ${max_amount:,.2f}")
+        print(f"   🔻 Mínima: ${min_amount:,.2f}")
         print(f"   👥 Clientes únicos: {unique_customers}")
         print(f"   💳 Métodos pago: {payment_methods}")
         

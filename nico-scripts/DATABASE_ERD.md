@@ -57,6 +57,16 @@ erDiagram
         decimal unit_price
     }
     
+    UserBehavior {
+        bigserial behavior_id PK
+        bigint customer_id FK
+        varchar event_type
+        bigint product_id FK
+        varchar session_id
+        timestamp timestamp
+        jsonb metadata
+    }
+    
     %% ===========================================
     %% BASE DE DATOS: erp_db (Puerto 5434)
     %% ===========================================
@@ -146,9 +156,11 @@ erDiagram
     
     Customer ||--o{ Product : "owns"
     Customer ||--o{ Transaction : "receives"
+    Customer ||--o{ UserBehavior : "generates"
     Buyer ||--o{ Transaction : "makes"
     Transaction ||--o{ TransactionDetail : "contains"
     Product ||--o{ TransactionDetail : "included_in"
+    Product ||--o{ UserBehavior : "tracked_in"
     
     %% ===========================================
     %% RELACIONES SECUNDARIAS
@@ -230,9 +242,11 @@ erDiagram
     
     Customer ||--o{ Product : "owns"
     Customer ||--o{ Transaction : "receives"
+    Customer ||--o{ UserBehavior : "generates"
     Buyer ||--o{ Transaction : "makes"
     Transaction ||--o{ TransactionDetail : "contains"
     Product ||--o{ TransactionDetail : "included_in"
+    Product ||--o{ UserBehavior : "tracked_in"
 ```
 
 ### **2. 📦 erp_db (Puerto 5434) - Gestión de Inventario**
@@ -343,6 +357,7 @@ erDiagram
 | **Product** | Productos vendidos por clientes | product_id, customer_id, name, category, price |
 | **Transaction** | Transacciones de compra | transaction_id, buyer_id, customer_id, total_amount |
 | **TransactionDetail** | Detalles de productos en transacciones | transaction_detail_id, transaction_id, product_id, quantity |
+| **UserBehavior** | Eventos de comportamiento de usuarios | behavior_id, customer_id, event_type, product_id, session_id |
 
 ### **📦 Gestión de Inventario (erp_db)**
 
@@ -376,11 +391,13 @@ erDiagram
 
 1. **Customer** → **Product** (1:N) - Un cliente puede tener muchos productos
 2. **Customer** → **Transaction** (1:N) - Un cliente puede recibir muchas transacciones
-3. **Buyer** → **Transaction** (1:N) - Un comprador puede hacer muchas transacciones
-4. **Transaction** → **TransactionDetail** (1:N) - Una transacción puede tener muchos detalles
-5. **Product** → **TransactionDetail** (1:N) - Un producto puede estar en muchos detalles
-6. **Customer** → **Interaction** (1:N) - Un cliente puede tener muchas interacciones
-7. **Transaction** → **Shipment** (1:1) - Una transacción puede tener un envío
+3. **Customer** → **UserBehavior** (1:N) - Un cliente puede generar muchos eventos de comportamiento
+4. **Buyer** → **Transaction** (1:N) - Un comprador puede hacer muchas transacciones
+5. **Transaction** → **TransactionDetail** (1:N) - Una transacción puede tener muchos detalles
+6. **Product** → **TransactionDetail** (1:N) - Un producto puede estar en muchos detalles
+7. **Product** → **UserBehavior** (1:N) - Un producto puede ser trackeado en muchos eventos
+8. **Customer** → **Interaction** (1:N) - Un cliente puede tener muchas interacciones
+9. **Transaction** → **Shipment** (1:1) - Una transacción puede tener un envío
 
 ## 🎯 Tipos de Datos Utilizados
 

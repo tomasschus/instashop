@@ -194,9 +194,9 @@ def create_transaction_chart(metrics):
     fig = go.Figure()
     fig.add_trace(go.Indicator(
         mode = "number+delta",
-        value = metrics.get('transaction_count', 0),
+        value = metrics.get('total_transactions', 0),
         title = {"text": "Transacciones"},
-        delta = {"reference": metrics.get('transaction_count', 0) * 0.8},
+        delta = {"reference": metrics.get('total_transactions', 0) * 0.8},
         domain = {'x': [0, 1], 'y': [0, 1]}
     ))
     
@@ -509,8 +509,8 @@ def main():
         st.subheader("💰 Transacciones")
         if transaction_metrics:
             st.metric("Ingresos Totales", f"${transaction_metrics.get('total_revenue', 0):,.2f}")
-            st.metric("Transacciones", transaction_metrics.get('transaction_count', 0))
-            st.metric("Valor Promedio", f"${transaction_metrics.get('avg_transaction_value', 0):,.2f}")
+            st.metric("Transacciones", transaction_metrics.get('total_transactions', 0))
+            st.metric("Valor Promedio", f"${transaction_metrics.get('avg_amount', 0):,.2f}")
             st.metric("Clientes Únicos", transaction_metrics.get('unique_customers', 0))
             st.metric("Transacción Máxima", f"${transaction_metrics.get('max_transaction', 0):,.2f}")
             st.metric("Transacción Mínima", f"${transaction_metrics.get('min_transaction', 0):,.2f}")
@@ -531,23 +531,40 @@ def main():
     with col3:
         st.subheader("🛍️ Productos por Categoría")
         if product_metrics:
-            for category, data in product_metrics.items():
-                st.metric(
-                    f"{category.title()} - Ventas", 
-                    data.get('product_sales', 0)
-                )
-                st.metric(
-                    f"{category.title()} - Ingresos", 
-                    f"${data.get('category_revenue', 0):,.2f}"
-                )
-                st.metric(
-                    f"{category.title()} - Clientes", 
-                    data.get('unique_customers', 0)
-                )
-                st.metric(
-                    f"{category.title()} - Productos", 
-                    data.get('unique_products', 0)
-                )
+            # Manejar datos CDC vs legacy
+            if "cdc_products" in product_metrics:
+                # Datos CDC: mostrar desde la lista
+                cdc_data = product_metrics["cdc_products"]
+                if cdc_data:
+                    for item in cdc_data:
+                        category = item.get('category', 'unknown')
+                        st.metric(
+                            f"{category.title()} - Ventas", 
+                            item.get('product_sales', 0)
+                        )
+                        st.metric(
+                            f"{category.title()} - Ingresos", 
+                            f"${item.get('category_revenue', 0):,.2f}"
+                        )
+            else:
+                # Datos legacy: usar formato dict
+                for category, data in product_metrics.items():
+                    st.metric(
+                        f"{category.title()} - Ventas", 
+                        data.get('product_sales', 0)
+                    )
+                    st.metric(
+                        f"{category.title()} - Ingresos", 
+                        f"${data.get('category_revenue', 0):,.2f}"
+                    )
+                    st.metric(
+                        f"{category.title()} - Clientes", 
+                        data.get('unique_customers', 0)
+                    )
+                    st.metric(
+                        f"{category.title()} - Productos", 
+                        data.get('unique_products', 0)
+                    )
         else:
             st.info("⏳ Esperando datos de Spark...")
     
