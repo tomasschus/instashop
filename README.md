@@ -1,22 +1,69 @@
 # 🛒 InstaShop Analytics Platform
 
-Plataforma completa de análisis de datos para comercio electrónico usando Docker, PostgreSQL, Kafka y Apache Spark con dashboard en tiempo real.
+Plataforma completa de análisis de datos para comercio electrónico usando **Change Data Capture (CDC)**, **Apache Kafka**, **Apache Spark** y **Redis** con dashboard en tiempo real.
 
-## 🏗️ Arquitectura
+## 🏗️ Arquitectura CDC + Dual Pipeline
 
 ```
 ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   PostgreSQL    │    │      Kafka      │    │   Apache Spark  │
-│   (5 bases)     │    │   (3 brokers)   │    │   + Jupyter     │
+│   PostgreSQL    │    │   Debezium     │    │   Apache Kafka  │
+│   (5 bases)     │───▶│   CDC Engine   │───▶│   (3 brokers)   │
 └─────────────────┘    └─────────────────┘    └─────────────────┘
          │                        │                        │
-         └────────────────────────┼────────────────────────┘
-                                  │
-         ┌─────────────────────────────────────────────────────┐
-         │              🎯 Streamlit Dashboard                │
-         │           📊 Business Intelligence                 │
-         └─────────────────────────────────────────────────────┘
+         │                        │                        │
+         │                        │                        │
+         │                        │                        ▼
+         │                        │              ┌─────────────────┐
+         │                        │              │   Apache Spark │
+         │                        │              │   Streaming    │
+         │                        │              └─────────────────┘
+         │                        │                        │
+         │                        │                        ▼
+         │                        │              ┌─────────────────┐
+         │                        │              │     Redis      │
+         │                        │              │   (Cache)      │
+         │                        │              └─────────────────┘
+         │                        │                        │
+         │                        │                        ▼
+         │                        │              ┌─────────────────┐
+         │                        │              │ 🎯 Streamlit   │
+         │                        │              │   Dashboard    │
+         │                        │              │ 📊 Real-time   │
+         │                        │              └─────────────────┘
+         │                        │
+         │                        ▼
+         │              ┌─────────────────┐
+         │              │   Python        │
+         │              │   Consumer      │
+         │              │   (CDC → DWH)   │
+         │              └─────────────────┘
+         │                        │
+         ▼                        ▼
+┌─────────────────┐    ┌─────────────────┐
+│   Data          │    │   Data          │
+│   Warehouse     │    │   Warehouse     │
+│   (DWH)         │    │   (DWH)         │
+│   Historical    │    │   Real-time     │
+└─────────────────┘    └─────────────────┘
 ```
+
+### 🔄 Dos Flujos Principales
+
+#### **1. 📊 CDC → Spark → Redis → Dashboard (Tiempo Real)**
+```
+PostgreSQL → Debezium → Kafka → Spark Streaming → Redis → Streamlit Dashboard
+```
+- **Propósito**: Métricas en tiempo real para dashboards
+- **Latencia**: Sub-segundo
+- **Datos**: Agregaciones y métricas calculadas
+
+#### **2. 🗄️ CDC → Python Consumer → Data Warehouse (Histórico)**
+```
+PostgreSQL → Debezium → Kafka → Python Consumer → DWH PostgreSQL
+```
+- **Propósito**: Almacenamiento histórico para análisis
+- **Latencia**: Cerca de tiempo real
+- **Datos**: Eventos individuales preservados
 
 ### 🗄️ Bases de Datos (PostgreSQL)
 - **instashop** (Puerto 5432): Base principal con transacciones, customers y productos
@@ -25,13 +72,15 @@ Plataforma completa de análisis de datos para comercio electrónico usando Dock
 - **ecommerce_db** (Puerto 5435): Datos de e-commerce
 - **dwh_db** (Puerto 5436): Data Warehouse para análisis
 
-### ⚡ Streaming (Apache Kafka)
+### ⚡ Streaming (Apache Kafka + Debezium CDC)
 - **kafka1** (Puerto 9092): Broker principal
 - **kafka2** (Puerto 9093): Broker secundario  
 - **kafka3** (Puerto 9094): Broker terciario
+- **debezium-connect** (Puerto 8083): CDC Engine para PostgreSQL
 
-### 🔥 Big Data (Apache Spark)
+### 🔥 Big Data (Apache Spark + Redis)
 - **Spark Master** (Puerto 8080): Interfaz web de Spark
+- **Redis** (Puerto 6379): Cache en tiempo real para métricas
 - **Jupyter Notebook** (Puerto 8888): Análisis interactivo
 
 ## 🚀 Inicio Rápido
@@ -41,26 +90,76 @@ Plataforma completa de análisis de datos para comercio electrónico usando Dock
 docker compose up -d
 ```
 
-### 2. Poblar con Datos de Prueba
+### 2. Configurar CDC (Change Data Capture)
 ```bash
 # Activar entorno virtual
-.\env\Scripts\activate
+source venv/bin/activate
 
-# Ejecutar generación de datos
+# Configurar PostgreSQL para CDC
+python nico-scripts/init_postgres_cdc.py
+
+# Desplegar conectores Debezium
+python nico-scripts/setup_debezium.py
+```
+
+### 3. Poblar con Datos de Prueba
+```bash
+# Generar datos iniciales
 python fake-data.py
+
+# Generar datos realistas en tiempo real
+python nico-scripts/realistic_data_generator.py
 ```
 
-### 3. Ejecutar ETL Pipeline
+### 4. Ejecutar Dual Pipeline CDC
 ```bash
-python local_etl.py
+# Terminal 1: CDC → Data Warehouse (Histórico)
+python nico-scripts/cdc_dwh_consumer.py
+
+# Terminal 2: CDC → Spark → Redis (Tiempo Real)
+python nico-scripts/spark-streaming/cdc_spark_redis.py
 ```
 
-### 4. Lanzar Dashboard
+### 5. Lanzar Dashboard
 ```bash
-streamlit run dashboard.py --server.port 8501
+streamlit run nico-scripts/dashboards/realtime_spark_dashboard.py --server.port 8501
 ```
 
 **🌐 Dashboard disponible en:** http://localhost:8501
+
+## 🔄 Dual Pipeline CDC
+
+### 📊 Pipeline Tiempo Real (Spark + Redis)
+**Propósito**: Dashboard interactivo con métricas en tiempo real
+
+```bash
+# Ejecutar Spark Streaming
+python nico-scripts/spark-streaming/cdc_spark_redis.py
+```
+
+**Métricas generadas en Redis:**
+- `cdc_spark_metrics:transactions` - Transacciones, revenue, clientes únicos
+- `cdc_spark_metrics:products` - Ventas por categoría
+- `metrics:behavior:*` - Eventos de comportamiento (búsquedas, vistas, carrito)
+
+### 🗄️ Pipeline Histórico (DWH)
+**Propósito**: Almacenamiento histórico para análisis y reportes
+
+```bash
+# Ejecutar Consumer CDC → DWH
+python nico-scripts/cdc_dwh_consumer.py
+```
+
+**Datos almacenados en DWH:**
+- `realtime_events` - Todos los eventos CDC preservados
+- Eventos de transacciones, comportamiento, productos
+- Timestamps precisos para análisis temporal
+
+### 🎯 Beneficios del Dual Pipeline
+- **Tiempo Real**: Dashboard responsivo con métricas actualizadas
+- **Histórico**: Análisis de tendencias y patrones a largo plazo
+- **Escalabilidad**: Separación de responsabilidades
+- **Resiliencia**: Fallback entre sistemas
 
 ## 📊 KPIs y Métricas
 
@@ -92,12 +191,24 @@ streamlit run dashboard.py --server.port 8501
 
 ```
 instashop/
-├── 🐳 docker-compose.yml       # Orquestación de servicios
-├── 🎯 dashboard.py             # Dashboard Streamlit
-├── 🔄 local_etl.py            # Pipeline ETL
-├── 📊 fake-data.py            # Generador de datos
-├── 📁 data/                   # Datos persistentes PostgreSQL
-├── 🐍 env/                    # Entorno virtual Python
+├── 🐳 docker-compose.yml                    # Orquestación de servicios
+├── 📊 fake-data.py                         # Generador de datos iniciales
+├── 📁 debezium-config/                     # Configuraciones CDC
+│   ├── instashop-connector.json            # Conector principal
+│   ├── crm-connector.json                  # Conector CRM
+│   ├── erp-connector.json                  # Conector ERP
+│   └── ecommerce-connector.json            # Conector E-commerce
+├── 📁 nico-scripts/                        # Scripts principales
+│   ├── init_postgres_cdc.py               # Configuración CDC PostgreSQL
+│   ├── setup_debezium.py                 # Despliegue conectores CDC
+│   ├── realistic_data_generator.py        # Generador datos realistas
+│   ├── cdc_dwh_consumer.py                # Consumer CDC → DWH
+│   ├── 📁 spark-streaming/                # Scripts Spark
+│   │   └── cdc_spark_redis.py            # Spark CDC → Redis
+│   └── 📁 dashboards/                     # Dashboards
+│       └── realtime_spark_dashboard.py    # Dashboard principal
+├── 📁 data/                               # Datos persistentes PostgreSQL
+├── 🐍 venv/                               # Entorno virtual Python
 └── 📋 README.md
 ```
 

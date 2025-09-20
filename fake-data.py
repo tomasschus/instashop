@@ -76,6 +76,18 @@ CREATE TABLE IF NOT EXISTS TransactionDetail (
 );
 """)
 
+cursors["onlinestore"].execute("""
+CREATE TABLE IF NOT EXISTS UserBehavior (
+    behavior_id BIGSERIAL PRIMARY KEY,
+    customer_id BIGINT REFERENCES Customer(customer_id),
+    event_type VARCHAR(50),
+    product_id BIGINT,
+    session_id VARCHAR(100),
+    timestamp TIMESTAMP DEFAULT NOW(),
+    metadata JSONB
+);
+""")
+
 # =====================================================
 # Inventory
 # =====================================================

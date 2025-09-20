@@ -1,0 +1,24 @@
+{
+  "name": "erp-connector",
+  "config": {
+    "connector.class": "io.debezium.connector.postgresql.PostgresConnector",
+    "tasks.max": "1",
+    "database.hostname": "erp-db",
+    "database.port": "5432",
+    "database.user": "erp",
+    "database.password": "erp123",
+    "database.dbname": "erp_db",
+    "database.server.name": "erp",
+    "slot.name": "erp_slot",
+    "publication.name": "erp_publication",
+    "table.include.list": "public.stock,public.inventorymovement",
+    "topic.prefix": "erp",
+    "schema.history.internal.kafka.topic": "erp.history",
+    "schema.history.internal.kafka.bootstrap.servers": "kafka1:19092,kafka2:19092,kafka3:19092",
+    "transforms": "route",
+    "transforms.route.type": "org.apache.kafka.connect.transforms.RegexRouter",
+    "transforms.route.regex": "([^.]+)\\.([^.]+)\\.([^.]+)",
+    "transforms.route.replacement": "$3",
+    "plugin.name": "pgoutput"
+  }
+}
